@@ -1,10 +1,19 @@
-import { Controller, Post, Body, Res } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Res,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../skip-auth/skip-auth.decorator';
 import { LoginAuthDto, RegisterAuthDto } from './dto/auth.dto';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { ClassSerializerInterceptor, UseInterceptors } from '@nestjs/common';
+import { AuthGuard } from './auth.guard';
 
 @Controller('auth')
 @ApiTags('Auth')
@@ -37,5 +46,19 @@ export class AuthController {
   @Post('register')
   async register(@Body() regDto: RegisterAuthDto): Promise<any> {
     return await this.authService.register(regDto);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('profile')
+  async getProfile(@Req() req: Request): Promise<any> {
+    // 从请求头或解码后的用户信息中获取用户数据
+    return await this.authService.getUserInfo(req['user'].userId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('logout')
+  async logout(@Res({ passthrough: true }) res: Response): Promise<any> {
+    res.clearCookie('refreshToken');
+    return { message: 'Logout successful' };
   }
 }

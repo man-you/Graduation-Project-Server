@@ -97,7 +97,7 @@ export class AuthService {
       data: {
         email,
         password: hashedPassword,
-        userName: data.userName ? data.userName : '星链',
+        userName: data.userName ? data.userName : '知链者',
         role: 'student', // 默认角色
       },
       select: {
@@ -139,5 +139,31 @@ export class AuthService {
       refreshToken,
       user: instanceToPlain(safeUser),
     };
+  }
+
+  /**
+   * 用户id获取用户信息
+   */
+  async getUserInfo(userId: number): Promise<any> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          userName: true,
+          avatarUrl: true,
+          role: true,
+        },
+      });
+      const safeUser = plainToInstance(UserDto, user, {
+        excludeExtraneousValues: true,
+      });
+      return {
+        user: instanceToPlain(safeUser),
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid token');
+    }
   }
 }
