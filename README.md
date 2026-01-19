@@ -37,3 +37,9 @@ $ npm run test:cov
 ```bash
 npx prisma migrate dev
 ```
+
+## swagger文档地址
+
+```
+http://localhost:3000/api/v1/docs
+```

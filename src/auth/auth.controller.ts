@@ -1,34 +1,41 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Post, Body, Res } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { CreateAuthDto } from './dto/create-auth.dto';
-import { UpdateAuthDto } from './dto/update-auth.dto';
+import { ApiTags } from '@nestjs/swagger';
+import { Public } from '../skip-auth/skip-auth.decorator';
+import { LoginAuthDto, RegisterAuthDto } from './dto/auth.dto';
+import { Response } from 'express';
+import { ClassSerializerInterceptor, UseInterceptors } from '@nestjs/common';
 
 @Controller('auth')
+@ApiTags('Auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post()
-  create(@Body() createAuthDto: CreateAuthDto) {
-    return this.authService.create(createAuthDto);
+  @Public()
+  @Post('login')
+  @UseInterceptors(ClassSerializerInterceptor)
+  async login(
+    @Body() loginDto: LoginAuthDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<any> {
+    const { accessToken, refreshToken, user, message } =
+      await this.authService.login(loginDto);
+    //设置cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: false,
+      // secure: true, // 生产环境启用 secure，开发环境不用设置
+      // 设置跨站点请求时，是否携带cookie
+      // sameSite: 'none',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7天
+    });
+    return { accessToken, user, message };
   }
 
-  @Get()
-  findAll() {
-    return this.authService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.authService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAuthDto: UpdateAuthDto) {
-    return this.authService.update(+id, updateAuthDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.authService.remove(+id);
+  @Public()
+  @Post('register')
+  async register(@Body() regDto: RegisterAuthDto): Promise<any> {
+    return await this.authService.register(regDto);
   }
 }
