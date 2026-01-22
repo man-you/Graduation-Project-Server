@@ -9,6 +9,7 @@ export class LoginAuthDto {
   @IsString()
   email: string;
 
+  @Expose()
   @IsNotEmpty()
   @IsString()
   password: string;

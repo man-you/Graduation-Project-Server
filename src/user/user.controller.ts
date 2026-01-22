@@ -1,44 +1,32 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-} from '@nestjs/common';
+import { Controller, Body, Patch, UseGuards, Req } from '@nestjs/common';
 import { UserService } from './user.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserDto, SafeInfoDto } from './dto/update-user.dto';
+import { Request } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 
+@UseGuards()
 @Controller('user')
 @ApiTags('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
+  @Patch('info')
+  async updateUser(
+    @Body() updateUserDto: UpdateUserDto,
+    @Req() req: Request,
+  ): Promise<UpdateUserDto> {
+    // 从请求头中获取用户id
+    const userId = req['user'].userId;
+    return await this.userService.updateUser(+userId, updateUserDto);
   }
 
-  @Get()
-  findAll() {
-    return this.userService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.update(+id, updateUserDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.userService.remove(+id);
+  @Patch('pass')
+  async updateSafeInfo(
+    @Body() safeInfoDto: SafeInfoDto,
+    @Req() req: Request,
+  ): Promise<{ email: string }> {
+    // 从请求头中获取用户id
+    const userId = req['user'].userId;
+    return await this.userService.updateSafeInfo(+userId, safeInfoDto);
   }
 }
