@@ -153,7 +153,9 @@ export class AuthService {
           email: true,
           userName: true,
           avatarUrl: true,
+          bio: true,
           role: true,
+          phoneNumber: true,
         },
       });
       const safeUser = plainToInstance(UserDto, user, {

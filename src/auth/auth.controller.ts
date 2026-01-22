@@ -27,8 +27,6 @@ export class AuthController {
     @Body() loginDto: LoginAuthDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<any> {
-    console.log('loginDto', loginDto);
-
     const { accessToken, refreshToken, user, message } =
       await this.authService.login(loginDto);
     //设置cookie

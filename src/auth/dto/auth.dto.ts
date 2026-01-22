@@ -52,6 +52,10 @@ export class UserDto {
   email: string;
 
   @Expose()
+  @IsString()
+  phoneNumber: string;
+
+  @Expose()
   userName: string;
 
   @Expose()
@@ -61,4 +65,8 @@ export class UserDto {
   @Expose()
   @IsString()
   role: string;
+
+  @Expose()
+  @IsString()
+  bio: string;
 }

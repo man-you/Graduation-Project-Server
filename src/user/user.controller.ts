@@ -20,7 +20,7 @@ export class UserController {
     return await this.userService.updateUser(+userId, updateUserDto);
   }
 
-  @Patch('pass')
+  @Patch('security')
   async updateSafeInfo(
     @Body() safeInfoDto: SafeInfoDto,
     @Req() req: Request,
