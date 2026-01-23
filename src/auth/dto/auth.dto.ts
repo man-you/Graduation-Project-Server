@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsOptional } from 'class-validator';
 import { Expose, Exclude } from 'class-transformer';
 
 @Exclude()
@@ -18,10 +18,6 @@ export class LoginAuthDto {
 @Exclude()
 export class RegisterAuthDto {
   @Expose()
-  @IsString()
-  id: string;
-
-  @Expose()
   @IsEmail()
   @IsNotEmpty()
   @IsString()
@@ -34,6 +30,7 @@ export class RegisterAuthDto {
 
   @Expose()
   @IsString()
+  @IsOptional()
   userName?: string;
 
   @Expose()
