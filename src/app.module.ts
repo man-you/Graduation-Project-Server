@@ -9,9 +9,10 @@ import * as cookieParser from 'cookie-parser';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth/auth.guard';
 import { JwtService } from '@nestjs/jwt';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
-  imports: [AuthModule, UserModule, ConfigModule.forRoot({ isGlobal: true })],
+  imports: [AuthModule, UserModule, ConfigModule.forRoot({ isGlobal: true }), ChatModule],
   controllers: [AppController],
   providers: [
     AppService,
