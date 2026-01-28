@@ -7,15 +7,57 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// 用户角色枚举
+enum Role {
+  student
+  teacher
+  admin
+}
+
+/// 消息角色枚举
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
 model User {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   userName    String?
-  email       String   @unique
+  email       String    @unique
   password    String
   phoneNumber String?
   avatarUrl   String?
   bio         String?
-  role        String   @default("student")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  role        Role      @default(student)
+
+  conversations Conversation[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+/// 会话，消息
+model Conversation {
+  id          Int       @id @default(autoincrement())
+  title       String?
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id])
+
+  messages    Message[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+
+model Message {
+  id              Int           @id @default(autoincrement())
+  conversationId  Int
+  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+
+  role            MessageRole
+  content         String
+
+  createdAt       DateTime      @default(now())
 }
