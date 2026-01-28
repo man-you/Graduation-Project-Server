@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ChatService } from './chat.service';
-import { ChatController } from './chat.controller';
+import { ChatService } from './service/chat.service';
+import { ChatController } from './controller/chat.controller';
 import { ConfigModule } from '@nestjs/config';
 import { QwenConfigModule } from './qwen.config';
-import { QwenService } from './qwen.service';
+import { QwenService } from './service/qwen.service';
 
 @Module({
   imports: [
