@@ -9,55 +9,158 @@ datasource db {
 
 /// 用户角色枚举
 enum Role {
-  student
-  teacher
-  admin
+  student // 学生角色
+  teacher // 教师角色
+  admin   // 管理员角色
 }
 
 /// 消息角色枚举
 enum MessageRole {
-  user
-  assistant
-  system
+  user      // 用户发送的消息
+  assistant // AI助手回复的消息
+  system    // 系统消息
+}
+
+/// 节点层级枚举（固定1-4级，避免非法值）
+enum NodeLevel {
+  LEVEL1 // 一级节点：课程
+  LEVEL2 // 二级节点：模块
+  LEVEL3 // 三级节点：核心知识点
+  LEVEL4 // 四级节点：资源绑定节点
+}
+
+
+/// 节点关系类型枚举
+enum RelationType {
+  CONTAINS   // 包含关系
+  DEPENDS_ON // 依赖关系
+  SIMILAR_TO // 相似关系
+}
+
+/// 资源类型枚举
+enum ResourceType {
+  PPT   // PowerPoint演示文稿
+  VIDEO // 视频文件
+  PDF   // PDF文档
+}
+
+/// 学习行为类型枚举（记录学生操作）
+enum LearningAction {
+  VIEW         // 查看知识点/资源
+  ASK_QUESTION // 提问
+  DO_EXERCISE  // 做题
+  FINISH_LEARN // 完成学习
 }
 
 model User {
-  id          Int       @id @default(autoincrement())
-  userName    String?
-  email       String    @unique
-  password    String
-  phoneNumber String?
-  avatarUrl   String?
-  bio         String?
-  role        Role      @default(student)
+  id          Int       @id @default(autoincrement()) // 用户唯一标识符
+  userName    String?   // 用户昵称，可选字段
+  email       String    @unique                       // 用户邮箱，唯一约束，用作登录凭证
+  password    String    // 用户密码，经过加密处理
+  phoneNumber String?   // 用户手机号，可选字段
+  avatarUrl   String?   // 用户头像URL，可选字段
+  bio         String?   // 个人简介，可选字段
+  role        Role      @default(student)             // 用户角色，默认为学生
 
-  conversations Conversation[]
+  conversations Conversation[]  // 用户的所有对话记录
+  learningRecords LearningRecord[] // 用户的学习记录
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now()) // 用户创建时间
+  updatedAt   DateTime  @updatedAt      // 用户信息最后更新时间
 }
 
 /// 会话，消息
 model Conversation {
-  id          Int       @id @default(autoincrement())
-  title       String?
-  userId      Int
-  user        User      @relation(fields: [userId], references: [id])
+  id          Int       @id @default(autoincrement()) // 会话唯一标识符
+  title       String?   // 会话标题，可选字段，由AI生成
+  userId      Int       // 所属用户的ID
+  user        User      @relation(fields: [userId], references: [id]) // 与User表的关联关系
 
-  messages    Message[]
+  messages    Message[] // 此会话下的所有消息
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now()) // 会话创建时间
+  updatedAt   DateTime  @updatedAt      // 会话最后更新时间
 }
 
 
 model Message {
-  id              Int           @id @default(autoincrement())
-  conversationId  Int
-  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+  id              Int           @id @default(autoincrement()) // 消息唯一标识符
+  conversationId  Int           // 所属会话的ID
+  conversation    Conversation  @relation(fields: [conversationId], references: [id]) // 与Conversation表的关联关系
 
-  role            MessageRole
-  content         String
+  role            MessageRole   // 消息角色（user/assistant/system）
+  content         String        // 消息内容
 
-  createdAt       DateTime      @default(now())
+  nodeId Int?     // 关联的知识节点ID（可选）
+  node   Node? @relation(fields: [nodeId], references: [id]) // 与Node表的关联关系
+
+  createdAt       DateTime      @default(now()) // 消息创建时间
+}
+
+
+model Node {
+  id           Int       @id @default(autoincrement()) // 知识节点唯一标识符
+  nodeName     String    // 节点名称（如课程/模块/知识点名称）
+  nodeLevel    NodeLevel // 节点层级（LEVEL1-LEVEL4）
+  description  String?   // 节点描述，可选字段
+
+  parentNodeId Int?     // 父节点ID，可选字段（根节点没有父节点）
+  parentNode   Node?     @relation("NodeHierarchy", fields: [parentNodeId], references: [id]) // 父节点引用
+  childNodes   Node[]    @relation("NodeHierarchy") // 子节点列表
+
+  resource     Resource? // 关联的资源（仅四级节点有）
+  messages     Message[] // 关联的消息
+  learningRecords LearningRecord[] // 关联的学习记录
+
+  sourceRelations NodeRelation[] @relation("SourceNode") // 从此节点出发的关系
+  targetRelations NodeRelation[] @relation("TargetNode") // 指向此节点的关系
+
+  createdAt    DateTime  @default(now()) // 节点创建时间
+}
+
+
+model NodeRelation {
+  id            Int           @id @default(autoincrement()) // 节点关系唯一标识符
+  sourceNodeId  Int           // 源节点ID
+  targetNodeId  Int           // 目标节点ID
+  relationType  RelationType  // 关系类型
+
+  sourceNode    Node @relation("SourceNode", fields: [sourceNodeId], references: [id]) // 源节点引用
+  targetNode    Node @relation("TargetNode", fields: [targetNodeId], references: [id]) // 目标节点引用
+
+  @@unique([sourceNodeId, targetNodeId, relationType]) // 确保两个节点间同种关系不重复
+}
+
+
+model Resource {
+  id              Int           @id @default(autoincrement()) // 资源唯一标识符
+  resourceName    String        // 界面显示的文件名
+  resourceType    ResourceType  @default(PPT)                 // 资源类型，默认为PPT
+  resourcePath    String        // 存储桶路径或URL，实际文件存储位置
+  
+  // --- UI 增强字段 ---
+  fileSize        String?       // 文件大小，如 "2.4MB"
+  fileFormat      String?       // 文件格式，如 "PPTX"
+  downloadCount   Int           @default(0)                   // 下载次数统计
+
+  // 外键：强制 1:1 绑定 Node (Level 4)
+  nodeId          Int           @unique                       // 关联的节点ID，唯一约束
+  node            Node          @relation(fields: [nodeId], references: [id], onDelete: Cascade) // 与Node表的关联关系，删除节点时级联删除资源
+
+  createdAt       DateTime      @default(now()) // 资源创建时间
+  updatedAt       DateTime      @updatedAt      // 资源最后更新时间
+}
+
+
+/// 学生学习记录（用于学习分析与推荐）
+model LearningRecord {
+  id              Int           @id @default(autoincrement()) // 学习记录唯一标识符
+  userId          Int           // 用户ID
+  user            User          @relation(fields: [userId], references: [id]) // 与User表的关联关系
+  nodeId          Int           // 知识节点ID
+  node            Node          @relation(fields: [nodeId], references: [id]) // 与Node表的关联关系
+  actionType      LearningAction // 学习行为类型
+  duration        Int?          // 学习时长（单位：秒），可选字段
+  isCompleted     Boolean       @default(false)               // 是否完成学习， 默认为false
+  createdAt       DateTime      @default(now()) // 学习记录创建时间
 }
