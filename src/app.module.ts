@@ -10,9 +10,10 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth/auth.guard';
 import { JwtService } from '@nestjs/jwt';
 import { ChatModule } from './chat/chat.module';
+import { CourseModule } from './course/course.module';
 
 @Module({
-  imports: [AuthModule, UserModule, ConfigModule.forRoot({ isGlobal: true }), ChatModule],
+  imports: [AuthModule, UserModule, ConfigModule.forRoot({ isGlobal: true }), ChatModule, CourseModule],
   controllers: [AppController],
   providers: [
     AppService,

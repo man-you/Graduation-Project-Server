@@ -103,6 +103,8 @@ model Node {
   nodeName     String    // 节点名称（如课程/模块/知识点名称）
   nodeLevel    NodeLevel // 节点层级（LEVEL1-LEVEL4）
   description  String?   // 节点描述，可选字段
+  order         Int?      // 排序字段，可选字段
+  estimatedDuration Int? @default(0)   // 预计学习时长，单位秒，默认值NULL
 
   parentNodeId Int?     // 父节点ID，可选字段（根节点没有父节点）
   parentNode   Node?     @relation("NodeHierarchy", fields: [parentNodeId], references: [id]) // 父节点引用
