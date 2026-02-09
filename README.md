@@ -52,8 +52,28 @@ $ npm run start:prod
 │   │   ├── user.module.ts         # 用户模块定义
 │   │   ├── user.service.ts        # 用户服务逻辑
 │   │   └── dto/                   # 用户数据传输对象
-│   │       ├── create-user.dto.ts # 创建用户数据模型
 │   │       └── update-user.dto.ts # 更新用户数据模型
+│   ├── chat/                      # AI聊天模块
+│   │   ├── chat.module.ts         # 聊天模块定义
+│   │   ├── qwen.config.ts         # 通义千问配置
+│   │   ├── controller/            # 聊天控制器目录
+│   │   │   └── chat.controller.ts # 聊天控制器
+│   │   ├── dto/                   # 聊天相关DTO目录
+│   │   │   ├── conversation.dto.ts # 会话数据模型
+│   │   │   ├── create-chat.dto.ts # 创建聊天数据模型
+│   │   │   └── pagination.dto.ts  # 分页数据模型
+│   │   └── service/               # 聊天服务目录
+│   │       ├── chat.service.ts    # 聊天业务服务
+│   │       └── qwen.service.ts    # 通义千问服务
+│   ├── common/                    # 公共组件
+│   │   ├── filters/               # 异常过滤器目录
+│   │   │   └── http-exception.filter.ts # HTTP异常过滤器
+│   │   ├── interceptors/          # 拦截器目录
+│   │   │   └── response.interceptor.ts # 响应拦截器
+│   │   └── interface/             # 接口定义目录
+│   │       └── response.interface.ts # 响应接口定义
+│   ├── middleware/                # 中间件
+│   │   └── logger.middleware.ts   # 日志中间件
 │   └── skip-auth/                 # 跳过认证装饰器
 │       └── skip-auth.decorator.ts # Public 装饰器定义
 ├── prisma/                        # Prisma 配置目录
