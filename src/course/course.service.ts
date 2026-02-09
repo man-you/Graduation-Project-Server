@@ -47,4 +47,62 @@ export class CourseService {
       };
     });
   }
+
+  async getCourse(courseId: number) {
+    return this.prisma.node.findMany({
+      where: {
+        id: courseId,
+        parentNodeId: null,
+        nodeLevel: NodeLevel.LEVEL1,
+      },
+      orderBy: { order: 'asc' },
+      select: {
+        id: true,
+        nodeName: true,
+        nodeLevel: true,
+        description: true,
+        order: true,
+        parentNodeId: true,
+
+        childNodes: {
+          where: { nodeLevel: NodeLevel.LEVEL2 },
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            nodeName: true,
+            nodeLevel: true,
+            description: true,
+            order: true,
+            parentNodeId: true,
+
+            childNodes: {
+              where: { nodeLevel: NodeLevel.LEVEL3 },
+              orderBy: { order: 'asc' },
+              select: {
+                id: true,
+                nodeName: true,
+                nodeLevel: true,
+                description: true,
+                order: true,
+                parentNodeId: true,
+
+                childNodes: {
+                  where: { nodeLevel: NodeLevel.LEVEL4 },
+                  orderBy: { order: 'asc' },
+                  select: {
+                    id: true,
+                    nodeName: true,
+                    nodeLevel: true,
+                    description: true,
+                    order: true,
+                    parentNodeId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
 }

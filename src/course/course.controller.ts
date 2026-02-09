@@ -1,4 +1,4 @@
-import { Controller, Get, Req } from '@nestjs/common';
+import { Controller, Get, Req, Param, ParseIntPipe } from '@nestjs/common';
 import { CourseService } from './course.service';
 import { Request } from 'express';
 
@@ -11,8 +11,18 @@ export class CourseController {
    * @returns Courses
    */
   @Get('list')
-  async findCourses(@Req() req: Request) {
+  async findCourses(@Req() req: Request): Promise<any> {
     const userId = req['user']?.userId;
     return await this.courseService.findAllCourses(+userId);
+  }
+
+  /**
+   *
+   * @param id
+   * @returns Course
+   */
+  @Get(':id')
+  async getCourse(@Param('id', ParseIntPipe) id: number): Promise<any> {
+    return await this.courseService.getCourse(id);
   }
 }
