@@ -18,7 +18,7 @@ export class TencentCosController {
     @Query('expireTime') expireTime?: number,
   ) {
     return await this.tencentCosService.getSignedUrl(
-      Number(nodeId),
+      nodeId,
       method,
       expireTime ? Number(expireTime) : 3600,
     );
