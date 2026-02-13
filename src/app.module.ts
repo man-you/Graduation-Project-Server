@@ -12,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ChatModule } from './chat/chat.module';
 import { CourseModule } from './course/course.module';
 import { TencentCosModule } from './common/tencent-cos/tencent-cos.module';
+import { QuizModule } from './quiz/quiz.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TencentCosModule } from './common/tencent-cos/tencent-cos.module';
     ChatModule,
     CourseModule,
     TencentCosModule,
+    QuizModule,
   ],
   controllers: [AppController],
   providers: [

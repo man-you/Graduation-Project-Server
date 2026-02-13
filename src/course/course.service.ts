@@ -63,6 +63,7 @@ export class CourseService {
         description: true,
         order: true,
         parentNodeId: true,
+        estimatedDuration: true,
         childNodes: {
           where: { nodeLevel: NodeLevel.LEVEL2 },
           orderBy: { order: 'asc' },
