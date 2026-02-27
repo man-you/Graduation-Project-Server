@@ -5,5 +5,6 @@ import { QuizController } from './quiz.controller';
 @Module({
   controllers: [QuizController],
   providers: [QuizService],
+  exports: [QuizService], // 导出QuizService供其他模块使用
 })
 export class QuizModule {}

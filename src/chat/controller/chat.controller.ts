@@ -22,7 +22,7 @@ export class ChatController {
   @Post('send')
   async streamChat(
     @Body() body: CreateChatDto,
-    @Req() req: any, // 使用 any：SSE 场景下需要监听 req.on('close')
+    @Req() req: Request, // 使用 any：SSE 场景下需要监听 req.on('close')
     @Res() res: Response,
   ): Promise<void> {
     /**
@@ -151,10 +151,7 @@ export class ChatController {
   @Delete('delete/:id')
   async deleteConversation(
     @Param('id', ParseIntPipe) conversationId: number,
-    @Req() req: Request,
   ): Promise<void> {
-    const userId = req['user']?.userId;
-
-    await this.chatService.deleteConversation(userId, conversationId);
+    await this.chatService.deleteConversation(conversationId);
   }
 }

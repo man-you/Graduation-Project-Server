@@ -71,9 +71,28 @@ model User {
   conversations   Conversation[] // 用户的所有对话记录
   learningRecords LearningRecord[] // 用户的学习记录
   exerciseRecords ExerciseRecord[] // 练习答题记录
+  userFiles       UserFile[] // 用户上传的文件
 
   createdAt DateTime @default(now()) // 用户创建时间
   updatedAt DateTime @updatedAt // 用户信息最后更新时间
+}
+
+/// 用户上传的文件
+model UserFile {
+  id           Int      @id @default(autoincrement()) // 文件唯一标识符
+  fileName     String   // 文件名（不含路径）
+  filePath     String   @unique // COS中的完整路径
+  fileSize     String?  // 文件大小，如 "2.4MB"
+  fileFormat   String?  // 文件格式，如 "pdf"
+  isFolder     Boolean  @default(false) // 是否为文件夹
+  
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([userId])
 }
 
 /// 会话，消息
@@ -115,7 +134,7 @@ model Node {
   parentNode   Node?  @relation("NodeHierarchy", fields: [parentNodeId], references: [id]) // 父节点引用
   childNodes   Node[] @relation("NodeHierarchy") // 子节点列表
 
-  resource        Resource? // 关联的资源（仅四级节点有）
+  resource        Resource[] // 关联的资源（仅四级节点有）
   messages        Message[] // 关联的消息
   learningRecords LearningRecord[] // 关联的学习记录
   exercises       Exercise[] // 此节点下的练习题
@@ -150,7 +169,7 @@ model Resource {
   downloadCount Int     @default(0) // 下载次数统计
 
   // 外键：强制 1:1 绑定 Node (Level 4)
-  nodeId Int  @unique // 关联的节点ID，唯一约束
+  nodeId Int   // 关联的节点ID，唯一约束
   node   Node @relation(fields: [nodeId], references: [id], onDelete: Cascade) // 与Node表的关联关系，删除节点时级联删除资源
 
   createdAt DateTime @default(now()) // 资源创建时间

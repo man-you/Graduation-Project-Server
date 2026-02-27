@@ -2,12 +2,15 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { QwenService } from './qwen.service';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateChatDto } from '../dto/create-chat.dto';
+import { QuizService } from '../../quiz/quiz.service';
+import { buildAnalysisPrompt } from '../../prompts/analysis-prompt';
 
 @Injectable()
 export class ChatService {
   constructor(
     private qwenService: QwenService,
     private prisma: PrismaService,
+    private quizService: QuizService,
   ) {}
 
   // 开启流式对话
@@ -15,7 +18,13 @@ export class ChatService {
     dto: CreateChatDto,
     userId: number,
   ): Promise<{ conversationId: number; stream: AsyncIterable<string> }> {
-    const { userInput } = dto;
+    const { userInput, mode, nodeId } = dto;
+
+    // 处理分析模式
+    if (mode === 'analysis' && nodeId) {
+      return await this.handleAnalysisMode(nodeId, userId);
+    }
+
     let conversationId = dto.conversationId;
     /**
      *  开启数据库的事务操作避免数据库操作失败
@@ -182,10 +191,7 @@ export class ChatService {
   }
 
   // 删除对话，需要开启事务保证一致性
-  async deleteConversation(
-    userId: number,
-    conversationId: number,
-  ): Promise<void> {
+  async deleteConversation(conversationId: number): Promise<void> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
     });
@@ -202,5 +208,32 @@ export class ChatService {
         where: { id: conversationId },
       });
     });
+  }
+
+  // 处理分析模式
+  private async handleAnalysisMode(nodeId: number, userId: number) {
+    // 1. 获取节点绑定的习题记录和用户答题记录
+    const [quizData, userRecord] = await Promise.all([
+      this.quizService.getQuiz(nodeId),
+      this.quizService.getUserRecord(userId, nodeId),
+    ]);
+
+    // 2. 构建提示词上下文数据
+    const promptContext = {
+      nodeId,
+      quizData,
+      userRecord,
+    };
+
+    // 3. 调用外部提示词构建函数（在analysis-prompt.ts中实现）
+    const prompt = buildAnalysisPrompt(promptContext);
+
+    // 4. 调用 AI 模型并返回流（不保存到数据库）
+    const stream = await this.qwenService.createStream([
+      { role: 'user', content: prompt },
+    ]);
+
+    // 5. 返回流式响应，不创建对话记录
+    return { conversationId: null, stream };
   }
 }

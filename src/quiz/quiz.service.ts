@@ -30,7 +30,7 @@ export class QuizService {
   /**
    * 判断答案是否正确
    */
-  async checkAnswer(userId: number, dto: SubmitQuizDto) {
+  async checkAnswer(userId: number, dto: SubmitQuizDto): Promise<any> {
     const { nodeId, answers } = dto;
 
     // 1. 获取该节点下所有题目的正确答案（包含选项和填空答案）
@@ -113,5 +113,49 @@ export class QuizService {
       fullScore: exercises.reduce((sum, e) => sum + e.score, 0),
       details: resultsDetails,
     };
+  }
+
+  /**
+   * 获取用户答题记录
+   */
+  async getUserRecord(userId: number, nodeId: number): Promise<any> {
+    // 1. 获取该节点下所有题目的ID
+    const exercises = await this.prisma.exercise.findMany({
+      where: {
+        nodeId: nodeId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (exercises.length === 0) {
+      return [];
+    }
+
+    const exerciseIds = exercises.map(ex => ex.id);
+
+    // 2. 获取指定用户在这些题目上的所有记录并按时间排序
+    const allRecords = await this.prisma.exerciseRecord.findMany({
+      where: {
+        userId: userId,
+        exerciseId: {
+          in: exerciseIds,
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // 3. 为每个 exerciseId 保留最新的记录
+    const latestRecordsMap = new Map();
+    for (const record of allRecords) {
+      if (!latestRecordsMap.has(record.exerciseId)) {
+        latestRecordsMap.set(record.exerciseId, record);
+      }
+    }
+
+    return Array.from(latestRecordsMap.values());
   }
 }
