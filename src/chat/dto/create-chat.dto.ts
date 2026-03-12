@@ -10,7 +10,8 @@ import { Expose, Exclude } from 'class-transformer';
 
 enum ChatMode {
   CHAT = 'chat',
-  ANALYSIS = 'analysis',
+  ANALYSIS = 'analysis', 
+  SUMMARY = 'summary',
 }
 
 @Exclude()
@@ -21,7 +22,7 @@ export class CreateChatDto {
   conversationId: number;
 
   @Expose()
-  @ValidateIf((u) => u.mode !== 'analysis')
+  @ValidateIf((u) => u.mode !== 'analysis' && u.mode !== 'summary')
   @IsString()
   @IsNotEmpty()
   userInput: string;

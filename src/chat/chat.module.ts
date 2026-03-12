@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { ChatService } from './service/chat.service';
-import { ChatController } from './controller/chat.controller';
 import { ConfigModule } from '@nestjs/config';
+import { QuizModule } from '../quiz/quiz.module';
+
+import { ChatController } from './controller/chat.controller';
+import { ChatService } from './service/chat.service';
 import { QwenConfigModule } from './qwen.config';
 import { QwenService } from './service/qwen.service';
-import { QuizModule } from '../quiz/quiz.module';
 
 @Module({
   imports: [

@@ -509,8 +509,8 @@ export class TencentCosService {
     let finalNewPath = newPath;
     if (!newPath.includes('/')) {
       // newPath只是文件名，需要保持在oldPath的目录中
-      const oldDir = oldPath.includes('/') 
-        ? oldPath.substring(0, oldPath.lastIndexOf('/') + 1) 
+      const oldDir = oldPath.includes('/')
+        ? oldPath.substring(0, oldPath.lastIndexOf('/') + 1)
         : '';
       finalNewPath = oldDir + newPath;
     }
@@ -604,17 +604,17 @@ export class TencentCosService {
    */
   async renameUserResource(userId: number, oldPath: string, newPath: string) {
     const userBasePath = `users/${userId}`;
-    
+
     // 处理newPath：如果newPath不包含'/'，则保持在oldPath的同一目录下
     let finalNewPath = newPath;
     if (!newPath.includes('/')) {
       // newPath只是文件名，需要保持在oldPath的目录中
-      const oldDir = oldPath.includes('/') 
-        ? oldPath.substring(0, oldPath.lastIndexOf('/') + 1) 
+      const oldDir = oldPath.includes('/')
+        ? oldPath.substring(0, oldPath.lastIndexOf('/') + 1)
         : '';
       finalNewPath = oldDir + newPath;
     }
-    
+
     const fullOldPath = `${userBasePath}/${oldPath}`;
     const fullNewPath = `${userBasePath}/${finalNewPath}`;
 
@@ -1035,14 +1035,20 @@ export class TencentCosService {
    * @param expireTime 签名过期时间（秒），默认3600秒
    * @returns 预签名URL字符串
    */
+  /**
+   * 获取单个节点的所有预签名 URL
+   */
   async getSignedUrl(
     nodeId: number,
     method: 'get' | 'post' | 'put' | 'delete' = 'get',
     expireTime: number = 3600,
-  ): Promise<string> {
+  ): Promise<string | string[]> {
+    // 💡 修改返回类型支持数组
     const urls = await this.getMultipleSignedUrls([nodeId], method, expireTime);
+
     if (urls.length > 0) {
-      return urls[0];
+      // 💡 修改这里：返回所有 urls，而不是 urls[0]
+      return urls.length === 1 ? urls[0] : urls;
     }
     throw new Error(`未找到nodeId=${nodeId}对应的资源路径`);
   }
@@ -1101,6 +1107,7 @@ export class TencentCosService {
       const originalKey = keyResult.resourcePath;
       // 提取文件名用于响应头（仅编码文件名，避免中文乱码）
       const fileName = originalKey.split('/').pop() || '';
+
       const encodedFileName = encodeURIComponent(fileName);
 
       try {
@@ -1136,13 +1143,6 @@ export class TencentCosService {
     }
 
     // 根据原始nodeIds顺序排序结果
-    return nodeIds.map((nodeId) => {
-      const result = keyResults.find((r) => r.nodeId === nodeId);
-      if (result) {
-        const index = keyResults.indexOf(result);
-        return urls[index];
-      }
-      throw new Error(`未找到nodeId=${nodeId}对应的资源路径`);
-    });
+    return urls;
   }
 }

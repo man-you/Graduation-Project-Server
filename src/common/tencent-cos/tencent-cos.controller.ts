@@ -33,7 +33,7 @@ export class TencentCosController {
     @Req() req: Request,
     @Query('method') method?: 'get' | 'post' | 'put' | 'delete',
     @Query('expireTime') expireTime?: number,
-  ) {
+  ): Promise<any> {
     if (!req['user'] || !req['user'].userId) {
       throw new BadRequestException('用户信息无效');
     }
