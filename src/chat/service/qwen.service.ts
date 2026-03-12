@@ -22,22 +22,18 @@ export class QwenService {
     });
   }
 
-  async createStream(
-    messages: ChatCompletionMessageParam[],
-  ): Promise<AsyncIterable<string>> {
+  async createStream(messages: ChatCompletionMessageParam[]): Promise<AsyncIterable<string>> {
     const stream = await this.openai.chat.completions.create({
       model: 'qwen-plus',
       messages,
       stream: true,
     });
 
-    async function* iterator() {
+    return (async function* () {
       for await (const chunk of stream) {
-        const content = chunk.choices[0].delta.content;
+        const content = chunk.choices[0]?.delta?.content;
         if (content) yield content;
       }
-    }
-
-    return iterator();
+    })();
   }
 }

@@ -17,12 +17,22 @@ export class CourseController {
   }
 
   /**
-   *
-   * @param id
-   * @returns Course
+   * 获取课程大纲 (Outline)
+   * 场景：用于课程详情页面的树状列表展示
+   * 字段：id, nodeName, nodeLevel, description, childNodes
    */
   @Get(':id')
-  async getCourse(@Param('id', ParseIntPipe) id: number): Promise<any> {
+  async getCourseOutline(@Param('id', ParseIntPipe) id: number) {
     return await this.courseService.getCourse(id);
+  }
+
+  /**
+   * 获取课程知识图谱 (Knowledge Graph)
+   * 场景：用于 D3.js 可视化页面，包含资源详情和腾讯云 COS 签名
+   * 字段：包含 Outline 所有字段 + resource (signedUrl, fileSize 等)
+   */
+  @Get('graph/:id')
+  async getCourseKnowledgeGraph(@Param('id', ParseIntPipe) id: number) {
+    return await this.courseService.getCourseKnowledgeGraph(+id);
   }
 }
