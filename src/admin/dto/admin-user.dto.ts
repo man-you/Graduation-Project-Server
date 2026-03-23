@@ -64,5 +64,9 @@ export class AdminUserDto {
 
   @Expose()
   @IsString()
+  department: string;
+
+  @Expose()
+  @IsString()
   realName: string;
 }

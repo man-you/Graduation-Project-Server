@@ -6,7 +6,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { plainToInstance, instanceToPlain } from 'class-transformer';
+import { plainToInstance } from 'class-transformer';
 
 import { PrismaService } from 'prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
@@ -156,6 +156,9 @@ export class AuthService {
           bio: true,
           role: true,
           phoneNumber: true,
+          identifier: true,
+          grade: true,
+          department: true,
         },
       });
       const safeUser = plainToInstance(UserDto, user, {

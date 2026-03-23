@@ -29,22 +29,22 @@ export class AdminController {
     );
   }
 
-  @Get('user/:id')
+  @Get('users/:id')
   getUserById(@Param('id', ParseIntPipe) userId: number) {
     return this.adminService.getUserById(userId);
   }
 
-  @Post('user')
+  @Post('users')
   createUser(@Body() regDto: RegisterAuthDto) {
     return this.adminService.createUserByAdmin(regDto);
   }
 
-  @Delete('user/:id')
+  @Delete('users/:id')
   deleteUser(@Param('id', ParseIntPipe) userId: number) {
     return this.adminService.deleteUserByAdmin(userId);
   }
 
-  @Patch('user/:id')
+  @Patch('users/:id')
   updateUser(
     @Param('id', ParseIntPipe) userId: number,
     @Body() updateData: UpdateUserAdminDto,

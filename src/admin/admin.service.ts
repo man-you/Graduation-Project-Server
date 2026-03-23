@@ -42,6 +42,7 @@ export class AdminService {
           phoneNumber: true,
           grade: true,
           realName: true,
+          department: true,
         },
       }),
       this.prisma.user.count({ where }),
@@ -81,6 +82,7 @@ export class AdminService {
         phoneNumber: true,
         grade: true,
         realName: true,
+        department: true,
       },
     });
 
@@ -131,6 +133,7 @@ export class AdminService {
         role: true,
         phoneNumber: true,
         grade: true,
+        department: true,
         realName: true,
       },
     });
@@ -229,6 +232,7 @@ export class AdminService {
         phoneNumber: true,
         grade: true,
         realName: true,
+        department: true,
       },
     });
 

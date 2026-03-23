@@ -79,4 +79,8 @@ export class UserDto {
   @Expose()
   @IsString()
   grade: string;
+
+  @Expose()
+  @IsString()
+  department: string;
 }
