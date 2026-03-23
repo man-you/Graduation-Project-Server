@@ -47,12 +47,12 @@ export class AuthService {
     }
 
     const accessToken = this.jwtService.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       { secret: secretKey, expiresIn: '6h' },
     );
 
     const refreshToken = this.jwtService.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       { secret: refreshSecretKey, expiresIn: '7d' },
     );
 
@@ -65,7 +65,7 @@ export class AuthService {
       message: 'Login successful',
       accessToken,
       refreshToken,
-      user: instanceToPlain(safeUser),
+      user: safeUser,
     };
   }
 
@@ -119,12 +119,12 @@ export class AuthService {
     }
 
     const accessToken = this.jwtService.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       { secret: secretKey, expiresIn: '6h' },
     );
 
     const refreshToken = this.jwtService.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id, email: user.email, role: user.role },
       { secret: refreshSecretKey, expiresIn: '7d' },
     );
 
@@ -137,7 +137,7 @@ export class AuthService {
       message: 'Registration successful',
       accessToken,
       refreshToken,
-      user: instanceToPlain(safeUser),
+      user: safeUser,
     };
   }
 
@@ -162,7 +162,7 @@ export class AuthService {
         excludeExtraneousValues: true,
       });
       return {
-        user: instanceToPlain(safeUser),
+        user: safeUser,
       };
     } catch (error) {
       throw new UnauthorizedException('Invalid token');

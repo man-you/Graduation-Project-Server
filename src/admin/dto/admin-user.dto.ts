@@ -1,46 +1,32 @@
-import { IsEmail, IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsEnum } from 'class-validator';
+import { Role } from '@prisma/client';
 import { Expose, Exclude } from 'class-transformer';
 
 @Exclude()
-export class LoginAuthDto {
-  @Expose()
-  @IsEmail()
-  @IsNotEmpty()
-  @IsString()
-  email: string;
-
-  @Expose()
-  @IsNotEmpty()
-  @IsString()
-  password: string;
-}
-
-@Exclude()
-export class RegisterAuthDto {
-  @Expose()
-  @IsEmail()
-  @IsNotEmpty()
-  @IsString()
-  email: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  identifier: string;
-
+export class UpdateUserAdminDto {
   @Expose()
   @IsString()
   @IsOptional()
   userName?: string;
 
   @Expose()
+  @IsEmail()
+  @IsOptional()
+  email?: string;
+
+  @Expose()
   @IsString()
-  role?: string;
+  @IsOptional()
+  phoneNumber?: string;
+
+  @Expose()
+  @IsString()
+  @IsOptional()
+  password?: string;
+
+  @IsEnum(Role)
+  @IsOptional()
+  role?: Role;
 }
 
 @Exclude()
