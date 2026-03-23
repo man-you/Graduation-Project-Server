@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
@@ -87,7 +82,10 @@ export class AdminService {
     });
 
     if (!existingUser) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
+      throw new HttpException(
+        `User with ID ${userId} not found`,
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const safeUser = plainToInstance(AdminUserDto, existingUser, {
@@ -100,18 +98,23 @@ export class AdminService {
   /**
    * 管理员创建新用户
    */
-  async createUserByAdmin(regDto: RegisterAuthDto) {
+  async createUserByAdmin(
+    regDto: RegisterAuthDto,
+  ): Promise<{ message: string; user: AdminUserDto }> {
     const { email, password, userName, role, identifier } = regDto;
 
     if (role && !['student', 'teacher'].includes(role)) {
-      throw new BadRequestException('Role must be either "student", "teacher"');
+      throw new HttpException(
+        'Role must be either "student" or "teacher"',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
     if (existingUser) {
-      throw new ConflictException('Email already in use');
+      throw new HttpException('Email already in use', HttpStatus.CONFLICT);
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -157,7 +160,10 @@ export class AdminService {
     });
 
     if (!existingUser) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
+      throw new HttpException(
+        `User with ID ${userId} not found`,
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     await this.prisma.user.delete({
@@ -175,7 +181,10 @@ export class AdminService {
     });
 
     if (!existingUser) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
+      throw new HttpException(
+        `User with ID ${userId} not found`,
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const updatePayload: any = {};
@@ -190,7 +199,10 @@ export class AdminService {
       });
 
       if (existingEmailUser && existingEmailUser.id !== userId) {
-        throw new ConflictException('Email already in use by another user');
+        throw new HttpException(
+          'Email already in use by another user',
+          HttpStatus.CONFLICT,
+        );
       }
 
       updatePayload.email = updateData.email;

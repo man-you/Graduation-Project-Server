@@ -22,33 +22,33 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('users')
-  getAllUsers(@Query() pagination: PaginationDto) {
-    return this.adminService.getAllUsers(
+  async getAllUsers(@Query() pagination: PaginationDto): Promise<any> {
+    return await this.adminService.getAllUsers(
       pagination.pageNum,
       pagination.pageSize,
     );
   }
 
   @Get('users/:id')
-  getUserById(@Param('id', ParseIntPipe) userId: number) {
-    return this.adminService.getUserById(userId);
+  async getUserById(@Param('id', ParseIntPipe) userId: number): Promise<any> {
+    return await this.adminService.getUserById(userId);
   }
 
-  @Post('users')
-  createUser(@Body() regDto: RegisterAuthDto) {
-    return this.adminService.createUserByAdmin(regDto);
+  @Post('user')
+  async createUser(@Body() regDto: RegisterAuthDto): Promise<any> {
+    return await this.adminService.createUserByAdmin(regDto);
   }
 
   @Delete('users/:id')
-  deleteUser(@Param('id', ParseIntPipe) userId: number) {
-    return this.adminService.deleteUserByAdmin(userId);
+  async deleteUser(@Param('id', ParseIntPipe) userId: number): Promise<any> {
+    return await this.adminService.deleteUserByAdmin(userId);
   }
 
   @Patch('users/:id')
-  updateUser(
+  async updateUser(
     @Param('id', ParseIntPipe) userId: number,
     @Body() updateData: UpdateUserAdminDto,
-  ) {
-    return this.adminService.updateUserByAdmin(userId, updateData);
+  ): Promise<any> {
+    return await this.adminService.updateUserByAdmin(userId, updateData);
   }
 }

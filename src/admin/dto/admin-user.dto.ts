@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsEnum, IsIn } from 'class-validator';
 import { Role } from '@prisma/client';
 import { Expose, Exclude } from 'class-transformer';
 
@@ -24,9 +24,11 @@ export class UpdateUserAdminDto {
   @IsOptional()
   password?: string;
 
-  @IsEnum(Role)
+  @Expose()
+  @IsString()
   @IsOptional()
-  role?: Role;
+  @IsIn(['student', 'teacher', 'admin'])
+  role?: string;
 }
 
 @Exclude()
