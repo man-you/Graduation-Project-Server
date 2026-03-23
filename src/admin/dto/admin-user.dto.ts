@@ -30,7 +30,7 @@ export class UpdateUserAdminDto {
 }
 
 @Exclude()
-export class UserDto {
+export class AdminUserDto {
   @Expose()
   @IsString()
   id: string;
@@ -56,13 +56,13 @@ export class UserDto {
 
   @Expose()
   @IsString()
-  bio: string;
-
-  @Expose()
-  @IsString()
   identifier: string;
 
   @Expose()
   @IsString()
   grade: string;
+
+  @Expose()
+  @IsString()
+  realName: string;
 }

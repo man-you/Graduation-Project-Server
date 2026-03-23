@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
-import { UpdateUserAdminDto, UserDto } from './dto/admin-user.dto';
+import { UpdateUserAdminDto, AdminUserDto } from './dto/admin-user.dto';
 import { RegisterAuthDto } from '../auth/dto/auth.dto';
 import { Role } from '@prisma/client';
 import { PaginatedUsersDto } from './dto/paginated-users.dto';
@@ -34,19 +34,21 @@ export class AdminService {
         take: pageSize,
         select: {
           id: true,
+          avatarUrl: true,
           email: true,
           userName: true,
           identifier: true,
           role: true,
           phoneNumber: true,
           grade: true,
+          realName: true,
         },
       }),
       this.prisma.user.count({ where }),
     ]);
 
     const safeUsers = users.map((user) =>
-      plainToInstance(UserDto, user, {
+      plainToInstance(AdminUserDto, user, {
         excludeExtraneousValues: true,
       }),
     );
@@ -66,17 +68,19 @@ export class AdminService {
   /**
    * 管理员根据ID获取单个用户信息
    */
-  async getUserById(userId: number): Promise<{ user: UserDto }> {
+  async getUserById(userId: number): Promise<{ user: AdminUserDto }> {
     const existingUser = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
         email: true,
         userName: true,
+        avatarUrl: true,
         identifier: true,
         role: true,
         phoneNumber: true,
         grade: true,
+        realName: true,
       },
     });
 
@@ -84,7 +88,7 @@ export class AdminService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    const safeUser = plainToInstance(UserDto, existingUser, {
+    const safeUser = plainToInstance(AdminUserDto, existingUser, {
       excludeExtraneousValues: true,
     });
 
@@ -122,14 +126,16 @@ export class AdminService {
         id: true,
         email: true,
         userName: true,
+        avatarUrl: true,
         identifier: true,
         role: true,
         phoneNumber: true,
         grade: true,
+        realName: true,
       },
     });
 
-    const safeUser = plainToInstance(UserDto, user, {
+    const safeUser = plainToInstance(AdminUserDto, user, {
       excludeExtraneousValues: true,
     });
 
@@ -201,7 +207,7 @@ export class AdminService {
     }
 
     if (Object.keys(updatePayload).length === 0) {
-      const safeUser = plainToInstance(UserDto, existingUser, {
+      const safeUser = plainToInstance(AdminUserDto, existingUser, {
         excludeExtraneousValues: true,
       });
       return {
@@ -217,14 +223,16 @@ export class AdminService {
         id: true,
         email: true,
         userName: true,
+        avatarUrl: true,
         identifier: true,
         role: true,
         phoneNumber: true,
         grade: true,
+        realName: true,
       },
     });
 
-    const safeUser = plainToInstance(UserDto, updatedUser, {
+    const safeUser = plainToInstance(AdminUserDto, updatedUser, {
       excludeExtraneousValues: true,
     });
 

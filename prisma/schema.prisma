@@ -71,6 +71,8 @@ model User {
   identifier  String? @unique // 学号（学生）或工号（教师）
   department  String? // 院系/专业（学生：所属专业；教师：所属院系）
   grade       String? // 年级/班级（学生专用，教师可为空）
+  realName    String? // 真实姓名，可选字段
+
 
   conversations   Conversation[] // 用户的所有对话记录
   learningRecords LearningRecord[] // 用户的学习记录
