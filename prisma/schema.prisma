@@ -7,236 +7,259 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// 用户角色枚举
+// ==========================================
+// 枚举定义 (保持小写以兼容现有数据)
+// ==========================================
+
+/// 用户权限角色
 enum Role {
-  student // 学生角色
-  teacher // 教师角色
-  admin // 管理员角色
+  student // 学生
+  teacher // 教师
+  admin   // 管理员
 }
 
-/// 消息角色枚举
+/// 聊天消息发送方角色
 enum MessageRole {
-  user // 用户发送的消息
-  assistant // AI助手回复的消息
-  system // 系统消息
+  user      // 用户
+  assistant // AI 助手
+  system    // 系统指令
 }
 
-/// 节点层级枚举（固定1-4级，避免非法值）
+/// 知识图谱节点层级
 enum NodeLevel {
-  LEVEL1 // 一级节点：课程
-  LEVEL2 // 二级节点：模块
-  LEVEL3 // 三级节点：核心知识点
-  LEVEL4 // 四级节点：资源绑定节点
+  LEVEL1 // 一级：课程 (Course)
+  LEVEL2 // 二级：模块 (Module)
+  LEVEL3 // 三级：知识点 (Knowledge Point)
+  LEVEL4 // 四级：资源挂载点 (Resource Node)
 }
 
-/// 节点关系类型枚举
+/// 节点间的逻辑关系类型
 enum RelationType {
-  CONTAINS // 包含关系
-  DEPENDS_ON // 依赖关系
-  SIMILAR_TO // 相似关系
+  CONTAINS   // 包含关系 (A包含B)
+  DEPENDS_ON // 依赖关系 (学B前需学A)
+  SIMILAR_TO // 相似关系 (内容相关)
 }
 
-/// 资源类型枚举
+/// 资源文件类型
 enum ResourceType {
-  PPT // PowerPoint演示文稿
-  VIDEO // 视频文件
-  PDF // PDF文档
+  PPT
+  VIDEO
+  PDF
 }
 
-/// 学习行为类型枚举（记录学生操作）
+/// 用户学习行为埋点
 enum LearningAction {
-  VIEW // 查看知识点/资源
-  ASK_QUESTION // 提问
-  DO_EXERCISE // 做题
+  VIEW         // 浏览
+  ASK_QUESTION // 针对该点提问
+  DO_EXERCISE  // 做题
   FINISH_LEARN // 完成学习
 }
 
-/// 习题类型 (单选 / 判断 / 填空)
+/// 练习题题型
 enum ExerciseType {
   SINGLE_CHOICE // 单选题
-  TRUE_FALSE // 判断题
-  FILL_BLANK // 填空题
+  TRUE_FALSE    // 判断题
+  FILL_BLANK    // 填空题
 }
+
+// ==========================================
+// 模型定义
+// ==========================================
 
 model User {
-  id          Int     @id @default(autoincrement()) // 用户唯一标识符
-  userName    String? // 用户昵称，可选字段
-  email       String  @unique // 用户邮箱，唯一约束，用作登录凭证
-  password    String // 用户密码，经过加密处理
-  phoneNumber String? // 用户手机号，可选字段
-  avatarUrl   String? // 用户头像URL，可选字段
-  bio         String? // 个人简介，可选字段
-  role        Role    @default(student) // 用户角色，默认为学生
+  id          Int      @id @default(autoincrement())
+  userName    String?  // 用户昵称/显示名
+  email       String   @unique // 登录邮箱
+  password    String   // 加密后的密码
+  phoneNumber String?  // 联系电话
+  avatarUrl   String?  // 头像地址
+  bio         String?  // 个人简介
+  role        Role     @default(student)
 
-  conversations   Conversation[] // 用户的所有对话记录
-  learningRecords LearningRecord[] // 用户的学习记录
-  exerciseRecords ExerciseRecord[] // 练习答题记录
-  userFiles       UserFile[] // 用户上传的文件
+  // 身份信息
+  identifier  String?  @unique // 唯一编号：学号或工号
+  department  String?  // 所属院系/专业
+  grade       String?  // 年级/班级
+  realName    String?  // 实名信息
 
-  createdAt DateTime @default(now()) // 用户创建时间
-  updatedAt DateTime @updatedAt // 用户信息最后更新时间
+  // 反向关系列表
+  conversations   Conversation[]   // 用户的会话历史
+  learningRecords LearningRecord[] // 用户的学习进度记录
+  exerciseRecords ExerciseRecord[] // 用户的做题记录
+  userFiles       UserFile[]       // 用户上传的个人文件
+  createdCourses  Node[]           @relation("UserCreatedNodes") // 教师创建的课程节点
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-/// 用户上传的文件
 model UserFile {
-  id           Int      @id @default(autoincrement()) // 文件唯一标识符
-  fileName     String   // 文件名（不含路径）
-  filePath     String   @unique // COS中的完整路径
-  fileSize     String?  // 文件大小，如 "2.4MB"
-  fileFormat   String?  // 文件格式，如 "pdf"
-  isFolder     Boolean  @default(false) // 是否为文件夹
+  id         Int      @id @default(autoincrement())
+  fileName   String   // 文件原始名称
+  filePath   String   @unique // 存储桶(COS/OSS)中的唯一路径
+  fileSize   String?  // 文件大小描述 (如 "1.2MB")
+  fileFormat String?  // 后缀名
+  isFolder   Boolean  @default(false) // 是否为目录结构
   
-  userId       Int
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int      // 上传者ID
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   
   @@index([userId])
 }
 
-/// 会话，消息
 model Conversation {
-  id     Int     @id @default(autoincrement()) // 会话唯一标识符
-  title  String? // 会话标题，可选字段，由AI生成
-  userId Int // 所属用户的ID
-  user   User    @relation(fields: [userId], references: [id]) // 与User表的关联关系
+  id     Int     @id @default(autoincrement())
+  title  String? // 自动生成的会话标题
+  userId Int
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  messages Message[] // 此会话下的所有消息
+  messages Message[] // 会话中的消息流
 
-  createdAt DateTime @default(now()) // 会话创建时间
-  updatedAt DateTime @updatedAt // 会话最后更新时间
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Message {
-  id             Int          @id @default(autoincrement()) // 消息唯一标识符
-  conversationId Int // 所属会话的ID
-  conversation   Conversation @relation(fields: [conversationId], references: [id]) // 与Conversation表的关联关系
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  role    MessageRole // 消息角色（user/assistant/system）
-  content String // 消息内容
+  role    MessageRole // 消息发送方
+  content String      // 消息正文 (支持Markdown)
 
-  nodeId Int? // 关联的知识节点ID（可选）
-  node   Node? @relation(fields: [nodeId], references: [id]) // 与Node表的关联关系
+  nodeId Int?   // 该消息是否关联了某个特定的知识节点
+  node   Node?  @relation(fields: [nodeId], references: [id], onDelete: SetNull)
 
-  createdAt DateTime @default(now()) // 消息创建时间
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
 }
 
 model Node {
-  id                Int       @id @default(autoincrement()) // 知识节点唯一标识符
-  nodeName          String // 节点名称（如课程/模块/知识点名称）
-  nodeLevel         NodeLevel // 节点层级（LEVEL1-LEVEL4）
-  description       String? // 节点描述，可选字段
-  order             Int? // 排序字段，可选字段
-  estimatedDuration Int?      @default(0) // 预计学习时长，单位秒，默认值0
+  id                Int       @id @default(autoincrement())
+  nodeName          String    // 节点/课程名称
+  nodeLevel         NodeLevel // 当前层级
+  description       String?   // 节点详细介绍
+  order             Int?      @default(0) // 同级排序权重
+  estimatedDuration Int?      @default(0) // 预计学习时长 (秒)
 
-  parentNodeId Int? // 父节点ID，可选字段（根节点没有父节点）
-  parentNode   Node?  @relation("NodeHierarchy", fields: [parentNodeId], references: [id]) // 父节点引用
-  childNodes   Node[] @relation("NodeHierarchy") // 子节点列表
+  creatorId         Int?      // 创建者ID (通常仅LEVEL1课程节点有值)
+  creator           User?     @relation("UserCreatedNodes", fields: [creatorId], references: [id], onDelete: SetNull)
 
-  resource        Resource[] // 关联的资源（仅四级节点有）
-  messages        Message[] // 关联的消息
-  learningRecords LearningRecord[] // 关联的学习记录
-  exercises       Exercise[] // 此节点下的练习题
+  // 树形结构定义
+  parentNodeId      Int?      // 父节点ID
+  parentNode        Node?     @relation("NodeHierarchy", fields: [parentNodeId], references: [id], onDelete: Cascade)
+  childNodes        Node[]    @relation("NodeHierarchy")
 
-  sourceRelations NodeRelation[] @relation("SourceNode") // 从此节点出发的关系
-  targetRelations NodeRelation[] @relation("TargetNode") // 指向此节点的关系
+  resource          Resource[] // 挂载的教学资源 (1:N)
+  
+  messages          Message[]        // 关联的消息
+  learningRecords LearningRecord[] // 学生在该点的学习数据
+  exercises       Exercise[]       // 挂载在该点的练习题
 
-  createdAt DateTime @default(now()) // 节点创建时间
+  // 图谱拓扑关系
+  sourceRelations NodeRelation[] @relation("SourceNode") // 以此节点为起点
+  targetRelations NodeRelation[] @relation("TargetNode") // 以此节点为终点
+
+  createdAt DateTime @default(now())
 }
 
 model NodeRelation {
-  id           Int          @id @default(autoincrement()) // 节点关系唯一标识符
-  sourceNodeId Int // 源节点ID
-  targetNodeId Int // 目标节点ID
-  relationType RelationType // 关系类型
+  id           Int          @id @default(autoincrement())
+  sourceNodeId Int          // 起始节点
+  targetNodeId Int          // 目标节点
+  relationType RelationType // 关系类型 (如 DEPENDS_ON)
 
-  sourceNode Node @relation("SourceNode", fields: [sourceNodeId], references: [id]) // 源节点引用
-  targetNode Node @relation("TargetNode", fields: [targetNodeId], references: [id]) // 目标节点引用
+  sourceNode Node @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode Node @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
 
-  @@unique([sourceNodeId, targetNodeId, relationType]) // 确保两个节点间同种关系不重复
+  @@unique([sourceNodeId, targetNodeId, relationType])
 }
 
 model Resource {
-  id           Int          @id @default(autoincrement()) // 资源唯一标识符
-  resourceName String // 界面显示的文件名
-  resourceType ResourceType @default(PPT) // 资源类型，默认为PPT
-  resourcePath String // 存储桶路径或URL，实际文件存储位置
+  id           Int          @id @default(autoincrement())
+  resourceName String       // 资源显示名称
+  resourceType ResourceType @default(PPT) // 资源类别
+  resourcePath String       // 存储地址
+  fileSize     String?      // 文件大小
+  fileFormat   String?      // 文件扩展名
 
-  // --- UI 增强字段 ---
-  fileSize      String? // 文件大小，如 "2.4MB"
-  fileFormat    String? // 文件格式，如 "PPTX"
-  downloadCount Int     @default(0) // 下载次数统计
+  nodeId Int // 归属的知识节点ID
+  node   Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
-  // 外键：强制 1:1 绑定 Node (Level 4)
-  nodeId Int   // 关联的节点ID，唯一约束
-  node   Node @relation(fields: [nodeId], references: [id], onDelete: Cascade) // 与Node表的关联关系，删除节点时级联删除资源
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  createdAt DateTime @default(now()) // 资源创建时间
-  updatedAt DateTime @updatedAt // 资源最后更新时间
+  @@index([nodeId])
 }
 
-/// 学生学习记录（用于学习分析与推荐）
 model LearningRecord {
-  id          Int            @id @default(autoincrement()) // 学习记录唯一标识符
-  userId      Int // 用户ID
-  user        User           @relation(fields: [userId], references: [id]) // 与User表的关联关系
-  nodeId      Int // 知识节点ID
-  node        Node           @relation(fields: [nodeId], references: [id]) // 与Node表的关联关系
-  actionType  LearningAction // 学习行为类型
-  duration    Int? // 学习时长（单位：秒），可选字段
-  isCompleted Boolean        @default(false) // 是否完成学习，默认为false
-  createdAt   DateTime       @default(now()) // 学习记录创建时间
+  id          Int            @id @default(autoincrement())
+  userId      Int
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodeId      Int
+  node        Node           @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  actionType  LearningAction // 行为类型
+  duration    Int?           @default(0)     // 本次停留/学习时长
+  isCompleted Boolean        @default(false) // 是否标记为学完
+  
+  createdAt   DateTime       @default(now())
+
+  @@index([userId, nodeId])
 }
 
 model Exercise {
   id              Int          @id @default(autoincrement())
-  exerciseTitle   String? // 练习题标题
-  exerciseContent String // 练习题内容
-  type            ExerciseType // 练习题类型
-  score           Int          @default(10) // 分数，默认10分
+  exerciseTitle   String?      // 题目简述
+  exerciseContent String       // 题目正文
+  type            ExerciseType // 题型
+  score           Int          @default(10) // 题目分值
+  blankAnswer     String?      // 填空题的标准答案 (若是单选则存储在ExerciseOption中)
 
-  // 仅适用于填空题
-  blankAnswer String? // 填空题答案
+  nodeId Int // 关联知识点
+  node   Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
-  nodeId Int // 关联节点ID
-  node   Node @relation(fields: [nodeId], references: [id]) // 与Node表的关联关系
+  options ExerciseOption[] // 题目选项 (单选/判断用)
+  records ExerciseRecord[] // 学生答题历史
 
-  options ExerciseOption[] // 选项列表
-  records ExerciseRecord[] // 答题记录
-
-  createdAt DateTime @default(now()) // 创建时间
-  updatedAt DateTime @updatedAt // 更新时间
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ExerciseOption {
-  id         Int      @id @default(autoincrement()) // 选项ID
-  exerciseId Int // 练习题ID
-  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade) // 关联的练习题
+  id         Int      @id @default(autoincrement())
+  exerciseId Int
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 
-  content   String // 选项内容
-  isCorrect Boolean @default(false) // 是否为正确答案
+  content   String  // 选项描述内容
+  isCorrect Boolean @default(false) // 是否是正确选项
 
-  // 添加反向关系
-  exerciseRecords ExerciseRecord[]
+  exerciseRecords ExerciseRecord[] // 选过此项的记录
 
-  createdAt DateTime @default(now()) // 创建时间
+  createdAt DateTime @default(now())
 }
 
 model ExerciseRecord {
-  id     Int  @id @default(autoincrement()) // 练习答题记录ID
-  userId Int // 用户ID
-  user   User @relation(fields: [userId], references: [id]) // 关联用户
+  id       Int  @id @default(autoincrement())
+  userId   Int
+  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  exerciseId Int // 练习题ID
-  exercise   Exercise @relation(fields: [exerciseId], references: [id]) // 关联练习题
+  exerciseId Int
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 
-  selectedOptionId Int? // 所选选项ID
-  selectedOption   ExerciseOption? @relation(fields: [selectedOptionId], references: [id]) // 关联所选选项
+  selectedOptionId Int? // 学生选择的选项ID (单选/判断)
+  selectedOption   ExerciseOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
 
-  blankAnswer String? // 填空题答案
-  isCorrect   Boolean? // 是否正确
-  score       Int? // 得分
+  blankAnswer String?  // 学生输入的填空内容 (填空题)
+  isCorrect   Boolean? // 系统自动判定结果
+  score       Int?     // 本次得分
 
-  createdAt DateTime @default(now()) // 创建时间
+  createdAt DateTime @default(now())
+
+  @@index([userId, exerciseId])
 }

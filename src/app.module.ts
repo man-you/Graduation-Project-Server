@@ -13,6 +13,7 @@ import { ChatModule } from './chat/chat.module';
 import { CourseModule } from './course/course.module';
 import { TencentCosModule } from './common/tencent-cos/tencent-cos.module';
 import { QuizModule } from './quiz/quiz.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { QuizModule } from './quiz/quiz.module';
     CourseModule,
     TencentCosModule,
     QuizModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

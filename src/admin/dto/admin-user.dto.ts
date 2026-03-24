@@ -1,50 +1,38 @@
-import { IsEmail, IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsEnum, IsIn } from 'class-validator';
+import { Role } from '@prisma/client';
 import { Expose, Exclude } from 'class-transformer';
 
 @Exclude()
-export class LoginAuthDto {
-  @Expose()
-  @IsEmail()
-  @IsNotEmpty()
-  @IsString()
-  email: string;
-
-  @Expose()
-  @IsNotEmpty()
-  @IsString()
-  password: string;
-}
-
-@Exclude()
-export class RegisterAuthDto {
-  @Expose()
-  @IsEmail()
-  @IsNotEmpty()
-  @IsString()
-  email: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  password: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  identifier: string;
-
+export class UpdateUserAdminDto {
   @Expose()
   @IsString()
   @IsOptional()
   userName?: string;
 
   @Expose()
+  @IsEmail()
+  @IsOptional()
+  email?: string;
+
+  @Expose()
   @IsString()
+  @IsOptional()
+  phoneNumber?: string;
+
+  @Expose()
+  @IsString()
+  @IsOptional()
+  password?: string;
+
+  @Expose()
+  @IsString()
+  @IsOptional()
+  @IsIn(['student', 'teacher', 'admin'])
   role?: string;
 }
 
 @Exclude()
-export class UserDto {
+export class AdminUserDto {
   @Expose()
   @IsString()
   id: string;
@@ -70,10 +58,6 @@ export class UserDto {
 
   @Expose()
   @IsString()
-  bio: string;
-
-  @Expose()
-  @IsString()
   identifier: string;
 
   @Expose()
@@ -83,4 +67,8 @@ export class UserDto {
   @Expose()
   @IsString()
   department: string;
+
+  @Expose()
+  @IsString()
+  realName: string;
 }
