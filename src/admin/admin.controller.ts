@@ -29,6 +29,19 @@ export class AdminController {
     );
   }
 
+  @Get('search/users')
+  async searchUsers(
+    @Query('keyword') keyword: string,
+    @Query('pageNum', ParseIntPipe) pageNum: number = 1,
+    @Query('pageSize', ParseIntPipe) pageSize: number = 20,
+  ): Promise<any> {
+    return await this.adminService.searchUserByKeyword(
+      keyword,
+      pageNum,
+      pageSize,
+    );
+  }
+
   @Get('users/:id')
   async getUserById(@Param('id', ParseIntPipe) userId: number): Promise<any> {
     return await this.adminService.getUserById(userId);

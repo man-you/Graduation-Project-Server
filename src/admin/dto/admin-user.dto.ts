@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsOptional, IsEnum, IsIn } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsNumber, IsIn } from 'class-validator';
 import { Role } from '@prisma/client';
 import { Expose, Exclude } from 'class-transformer';
 
@@ -34,41 +34,50 @@ export class UpdateUserAdminDto {
 @Exclude()
 export class AdminUserDto {
   @Expose()
-  @IsString()
-  id: string;
+  @IsNumber()
+  id: number;
 
   @Expose()
+  @IsOptional()
   @IsString()
   email: string;
 
   @Expose()
+  @IsOptional()
   @IsString()
   phoneNumber: string;
 
   @Expose()
+  @IsOptional()
   userName: string;
 
   @Expose()
   @IsString()
+  @IsOptional()
   avatarUrl: string;
 
   @Expose()
   @IsString()
+  @IsOptional()
   role: string;
 
   @Expose()
   @IsString()
+  @IsOptional()
   identifier: string;
 
   @Expose()
   @IsString()
+  @IsOptional()
   grade: string;
 
   @Expose()
+  @IsOptional()
   @IsString()
   department: string;
 
   @Expose()
+  @IsOptional()
   @IsString()
   realName: string;
 }

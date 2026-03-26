@@ -16,7 +16,7 @@ export class AdminService {
    */
   async getAllUsers(
     pageNum: number = 1,
-    pageSize: number = 20,
+    pageSize: number = 10,
   ): Promise<PaginatedUsersDto> {
     const skip = (pageNum - 1) * pageSize;
 
@@ -256,5 +256,80 @@ export class AdminService {
       message: 'User updated successfully',
       user: safeUser,
     };
+  }
+
+  /**
+   * 管理员模糊查找用户信息
+   */
+  async searchUserByKeyword(
+    keyword: string,
+    pageNum: number = 1,
+    pageSize: number = 20,
+  ): Promise<any> {
+    if (!keyword?.trim()) {
+      return plainToInstance(
+        PaginatedUsersDto,
+        {
+          users: [],
+          pageNum,
+          pageSize,
+          total: 0,
+        },
+        { excludeExtraneousValues: true },
+      );
+    }
+
+    const skip = (pageNum - 1) * pageSize;
+
+    const where = {
+      role: { not: 'admin' as Role },
+      OR: [
+        {
+          identifier: {
+            contains: keyword.trim(),
+            mode: 'insensitive' as const,
+          },
+        },
+        {
+          realName: { contains: keyword.trim(), mode: 'insensitive' as const },
+        },
+        {
+          department: {
+            contains: keyword.trim(),
+            mode: 'insensitive' as const,
+          },
+        },
+      ],
+    };
+
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip,
+        take: pageSize,
+        select: {
+          id: true,
+          email: true,
+          userName: true,
+          avatarUrl: true,
+          identifier: true,
+          role: true,
+          phoneNumber: true,
+          grade: true,
+          realName: true,
+          department: true,
+        },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return plainToInstance(PaginatedUsersDto, {
+      users: users.map((user) =>
+        plainToInstance(AdminUserDto, user, { excludeExtraneousValues: true }),
+      ),
+      pageNum,
+      pageSize,
+      total,
+    });
   }
 }
