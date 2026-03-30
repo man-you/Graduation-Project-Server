@@ -124,17 +124,37 @@ export class CourseService {
     // 递归收集所有 LEVEL4 节点
     const level4Nodes = this.collectLevel4Nodes(course);
 
-    if (level4Nodes.length > 0) {
-      const nodeIds = level4Nodes.map((n) => n.id);
-      // 批量获取 COS 签名链接
-      const signedUrls = await this.cosService.getMultipleSignedUrls(nodeIds);
+    // 为每个 LEVEL4 节点的资源添加 signedUrl
+    for (const node of level4Nodes) {
+      if (Array.isArray(node.resource) && node.resource.length > 0) {
+        try {
+          // 使用现有的 getSignedUrl 方法，它会返回单个URL或URL数组
+          const signedUrls = await this.cosService.getSignedUrl(
+            node.id,
+            'get',
+            3600,
+          );
 
-      // 将 URL 回填到对应的资源对象中
-      level4Nodes.forEach((node, index) => {
-        if (node.resource) {
-          node.resource.signedUrl = signedUrls[index] ?? null;
+          // 确保 signedUrls 是数组格式
+          const urlArray = Array.isArray(signedUrls)
+            ? signedUrls
+            : [signedUrls];
+
+          // 将 signedUrl 添加到对应的资源对象
+          node.resource = node.resource.map((resource, idx) => ({
+            ...resource,
+            signedUrl: urlArray[idx] ?? null,
+          }));
+        } catch (error) {
+          // 如果获取签名URL失败，将所有资源的 signedUrl 设为 null
+          node.resource = node.resource.map((resource) => ({
+            ...resource,
+            signedUrl: null,
+          }));
         }
-      });
+      } else {
+        node.resource = [];
+      }
     }
 
     return courses;
@@ -173,12 +193,19 @@ export class CourseService {
                 select: {
                   ...baseFields,
                   resource: {
+                    where: {
+                      // 排除 VIDEO 类型的资源，只保留文档类型（如 PDF、PPT 等）
+                      resourceType: {
+                        not: 'VIDEO',
+                      },
+                    },
                     select: {
                       id: true,
                       resourceName: true,
                       resourceType: true,
                       fileSize: true,
                       fileFormat: true,
+                      resourcePath: true, // 添加 resourcePath 字段用于生成签名URL
                     },
                   },
                 },
