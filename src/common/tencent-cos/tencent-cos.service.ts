@@ -1043,11 +1043,9 @@ export class TencentCosService {
     method: 'get' | 'post' | 'put' | 'delete' = 'get',
     expireTime: number = 3600,
   ): Promise<string | string[]> {
-    // 💡 修改返回类型支持数组
     const urls = await this.getMultipleSignedUrls([nodeId], method, expireTime);
 
     if (urls.length > 0) {
-      // 💡 修改这里：返回所有 urls，而不是 urls[0]
       return urls.length === 1 ? urls[0] : urls;
     }
     throw new Error(`未找到nodeId=${nodeId}对应的资源路径`);

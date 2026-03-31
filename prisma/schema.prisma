@@ -8,7 +8,7 @@ datasource db {
 }
 
 // ==========================================
-// 枚举定义 (保持小写以兼容现有数据)
+// 枚举定义 
 // ==========================================
 
 /// 用户权限角色
@@ -88,6 +88,7 @@ model User {
   exerciseRecords ExerciseRecord[] // 用户的做题记录
   userFiles       UserFile[]       // 用户上传的个人文件
   createdCourses  Node[]           @relation("UserCreatedNodes") // 教师创建的课程节点
+  course          Node[]           @relation("UserCourses")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -145,7 +146,7 @@ model Node {
   nodeName          String    // 节点/课程名称
   nodeLevel         NodeLevel // 当前层级
   description       String?   // 节点详细介绍
-  order             Int?      @default(0) // 同级排序权重
+  order             Int       @default(0) // 同级排序权重
   estimatedDuration Int?      @default(0) // 预计学习时长 (秒)
 
   creatorId         Int?      // 创建者ID (通常仅LEVEL1课程节点有值)
@@ -156,17 +157,19 @@ model Node {
   parentNode        Node?     @relation("NodeHierarchy", fields: [parentNodeId], references: [id], onDelete: Cascade)
   childNodes        Node[]    @relation("NodeHierarchy")
 
+  students          User[]    @relation("UserCourses")
+
   resource          Resource[] // 挂载的教学资源 (1:N)
   
   messages          Message[]        // 关联的消息
-  learningRecords LearningRecord[] // 学生在该点的学习数据
-  exercises       Exercise[]       // 挂载在该点的练习题
+  learningRecords   LearningRecord[] // 学生在该点的学习数据
+  exercises         Exercise[]       // 挂载在该点的练习题
 
   // 图谱拓扑关系
-  sourceRelations NodeRelation[] @relation("SourceNode") // 以此节点为起点
-  targetRelations NodeRelation[] @relation("TargetNode") // 以此节点为终点
+  sourceRelations   NodeRelation[] @relation("SourceNode") // 以此节点为起点
+  targetRelations   NodeRelation[] @relation("TargetNode") // 以此节点为终点
 
-  createdAt DateTime @default(now())
+  createdAt         DateTime @default(now())
 }
 
 model NodeRelation {
