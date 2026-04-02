@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  NotFoundException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as COS from 'cos-nodejs-sdk-v5';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -28,7 +23,7 @@ export class TencentCosService {
     this.region = this.configService.get('TENCENT_COS_REGION');
 
     if (!secretId || !secretKey || !this.bucket || !this.region) {
-      throw new Error('Tencent COS 配置不完整，请检查环境变量');
+      throw new HttpException('Tencent COS 配置不完整，请检查环境变量', 500);
     }
 
     this.cosClient = new COS({
@@ -44,7 +39,7 @@ export class TencentCosService {
    */
   async createUserFolder(createDto: CreateTencentCoDto): Promise<any> {
     const { resourceName, parentPath, userId, courseId } = createDto;
-    if (!userId) throw new BadRequestException('必须提供用户ID');
+    if (!userId) throw new HttpException('必须提供用户ID', 400);
 
     let folderPath: string;
     if (!courseId) {
@@ -80,9 +75,7 @@ export class TencentCosService {
         },
       });
     } catch (error) {
-      throw new InternalServerErrorException(
-        `创建文件夹失败: ${error.message}`,
-      );
+      throw new HttpException(`创建文件夹失败: ${error.message}`, 400);
     }
   }
 
@@ -92,7 +85,7 @@ export class TencentCosService {
   async createUserFile(createDto: CreateTencentCoDto): Promise<any> {
     const { resourceName, parentPath, fileSize, fileFormat, userId, courseId } =
       createDto;
-    if (!userId) throw new BadRequestException('必须提供用户ID');
+    if (!userId) throw new HttpException('必须提供用户ID', 400);
 
     let filePath: string;
     if (!courseId) {
@@ -140,7 +133,7 @@ export class TencentCosService {
     // 1. 校验节点
     const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
     if (!node) {
-      throw new BadRequestException(`知识节点不存在: nodeId=${nodeId}`);
+      throw new HttpException(`知识节点不存在: nodeId=${nodeId}`, 400);
     }
 
     // 2. 构建新资源路径
@@ -218,7 +211,7 @@ export class TencentCosService {
     });
 
     if (!user) {
-      throw new BadRequestException('用户不存在');
+      throw new HttpException('用户不存在', 400);
     }
 
     const userBasePath = `users/${userId}`;
@@ -358,7 +351,7 @@ export class TencentCosService {
 
       return allResources;
     } catch (error) {
-      throw new BadRequestException(`获取列表失败: ${error.message}`);
+      throw new HttpException(`获取列表失败: ${error.message}`, 400);
     }
   }
 
@@ -424,7 +417,7 @@ export class TencentCosService {
 
       return [...folders, ...files];
     } catch (error) {
-      throw new BadRequestException(`获取列表失败: ${error.message}`);
+      throw new HttpException(`获取列表失败: ${error.message}`, 400);
     }
   }
 
@@ -440,7 +433,7 @@ export class TencentCosService {
     const resource = await this.prisma.resource.findFirst({
       where: whereCondition,
     });
-    if (!resource) throw new NotFoundException(`资源不存在`);
+    if (!resource) throw new HttpException(`资源不存在`, 404);
 
     const authorization = this.cosClient.getAuth({
       Method: method.toUpperCase() as COS.Method,
@@ -494,11 +487,11 @@ export class TencentCosService {
     const secretKey = this.configService.get('TENCENT_COS_SECRET_KEY');
 
     if (!bucket || !region) {
-      throw new Error('COS配置（bucket/region）未正确配置');
+      throw new HttpException('COS配置（bucket/region）未正确配置', 500);
     }
 
     if (!secretId || !secretKey) {
-      throw new Error('COS密钥（secretId/secretKey）配置缺失');
+      throw new HttpException('COS密钥（secretId/secretKey）配置缺失', 500);
     }
 
     // 2. 查询资源路径并校验
@@ -514,7 +507,7 @@ export class TencentCosService {
     });
 
     if (!keyResults || keyResults.length === 0) {
-      throw new Error(`未找到任何nodeId对应的资源路径`);
+      throw new HttpException(`未找到任何nodeId对应的资源路径`, 404);
     }
 
     // 检查是否所有传入的nodeId都存在
@@ -524,8 +517,9 @@ export class TencentCosService {
     const missingNodeIds = nodeIds.filter((id) => !foundNodeIds.includes(id));
 
     if (missingNodeIds.length > 0) {
-      throw new Error(
+      throw new HttpException(
         `未找到以下nodeId对应的资源路径: ${missingNodeIds.join(', ')}`,
+        404,
       );
     }
 
@@ -560,7 +554,7 @@ export class TencentCosService {
         // 构建完整的预签名URL
 
         if (!authorization) {
-          throw new Error('COS未返回有效的预签名URL');
+          throw new HttpException('COS未返回有效的预签名URL', 500);
         }
 
         const url = `https://${bucket}.cos.${region}.myqcloud.com/${originalKey}?${authorization}&response-content-disposition=inline%3B%20filename%3D%22${encodedFileName}%22`;
@@ -581,8 +575,9 @@ export class TencentCosService {
           secretId: secretId.substring(0, 10) + '...', // 脱敏展示
         });
 
-        throw new Error(
+        throw new HttpException(
           `COS签名生成失败：${error.message || JSON.stringify(error)}，节点ID: ${keyResult.nodeId}`,
+          500,
         );
       }
     }
@@ -631,7 +626,7 @@ export class TencentCosService {
       }
       return { success: true };
     } catch (error) {
-      throw new BadRequestException(`删除失败: ${error.message}`);
+      throw new HttpException(`删除失败: ${error.message}`, 400);
     }
   }
 
@@ -699,7 +694,7 @@ export class TencentCosService {
       }
       return { success: true, newPath: relativeNewPath };
     } catch (error) {
-      throw new BadRequestException(`重命名失败: ${error.message}`);
+      throw new HttpException(`重命名失败: ${error.message}`, 400);
     }
   }
 
@@ -769,7 +764,7 @@ export class TencentCosService {
 
   private formatPath(path: string, isFolder: boolean): string {
     if (path.includes('../') || path.includes('..\\'))
-      throw new BadRequestException('非法的路径');
+      throw new HttpException('非法的路径', 400);
     let cleanPath = path.replace(/\/+$/, '');
     if (isFolder) cleanPath += '/';
     return cleanPath.startsWith('/') ? cleanPath.substring(1) : cleanPath;

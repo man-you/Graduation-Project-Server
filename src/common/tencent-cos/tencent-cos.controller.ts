@@ -160,25 +160,19 @@ export class TencentCosController {
    */
   @Delete('user/delete')
   async deleteUserResource(
-    @Req() req: Request,
     @Query('path') resourcePath: string,
-    @Query('courseId') courseId?: string,
+    @Req() req: Request,
+    @Query('courseId', ParseIntPipe) courseId?: number,
   ): Promise<any> {
     const userId = this.getUserIdFromReq(req);
     if (!resourcePath) {
       throw new BadRequestException('必须提供 path 参数');
     }
 
-    // 手动转换courseId为数字（如果存在）
-    const parsedCourseId = courseId ? parseInt(courseId, 10) : undefined;
-    if (courseId && isNaN(parsedCourseId)) {
-      throw new BadRequestException('courseId 必须是有效的数字');
-    }
-
     return await this.tencentCosService.deleteUserResource(
       userId,
       resourcePath,
-      parsedCourseId,
+      courseId,
     );
   }
 }
