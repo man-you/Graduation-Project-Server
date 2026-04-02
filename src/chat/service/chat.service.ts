@@ -28,8 +28,12 @@ export class ChatService {
       return this.handleSummaryMode(nodeId);
     }
 
+    if (mode === 'generate' && nodeId) {
+      return this.handleGenerateMode(nodeId);
+    }
+
     let conversationId = dto.conversationId;
-    
+
     await this.prisma.$transaction(async (tx) => {
       if (conversationId) {
         const conversation = await tx.conversation.findFirst({
@@ -38,7 +42,10 @@ export class ChatService {
         });
 
         if (!conversation) {
-          throw new HttpException('Conversation not found', HttpStatus.NOT_FOUND);
+          throw new HttpException(
+            'Conversation not found',
+            HttpStatus.NOT_FOUND,
+          );
         }
       } else {
         const conversation = await tx.conversation.create({
@@ -120,7 +127,7 @@ export class ChatService {
       }),
       this.prisma.conversation.count({ where: { userId } }),
     ]);
-    
+
     return {
       conversations,
       pagination: { pageNum, pageSize, total },
@@ -134,7 +141,10 @@ export class ChatService {
     pageSize: number = 20,
   ) {
     if (!conversationId) {
-      throw new HttpException('Conversation ID is required', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Conversation ID is required',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const conversation = await this.prisma.conversation.findFirst({
@@ -166,7 +176,7 @@ export class ChatService {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
     });
-    
+
     if (!conversation) {
       throw new HttpException('Conversation not found', HttpStatus.NOT_FOUND);
     }
@@ -184,7 +194,9 @@ export class ChatService {
     ]);
 
     const prompt = buildAnalysisPrompt({ nodeId, quizData, userRecord });
-    const stream = await this.qwenService.createStream([{ role: 'user', content: prompt }]);
+    const stream = await this.qwenService.createStream([
+      { role: 'user', content: prompt },
+    ]);
 
     return { conversationId: null, stream };
   }
@@ -203,13 +215,41 @@ export class ChatService {
       throw new HttpException(`Node ${nodeId} not found`, HttpStatus.NOT_FOUND);
     }
 
-    const prompt = buildSummaryPrompt({ 
+    const prompt = buildSummaryPrompt({
       nodeId: node.id,
       nodeName: node.nodeName,
-      nodeDescription: node.description ?? ''
+      nodeDescription: node.description ?? '',
     });
-    
-    const stream = await this.qwenService.createStream([{ role: 'user', content: prompt }]);
+
+    const stream = await this.qwenService.createStream([
+      { role: 'user', content: prompt },
+    ]);
+    return { conversationId: null, stream };
+  }
+
+  private async handleGenerateMode(nodeId: number) {
+    if (nodeId <= 0) {
+      throw new HttpException('Invalid node ID', HttpStatus.BAD_REQUEST);
+    }
+
+    const node = await this.prisma.node.findUnique({
+      where: { id: nodeId },
+      select: { id: true, nodeName: true, description: true },
+    });
+
+    if (!node) {
+      throw new HttpException(`Node ${nodeId} not found`, HttpStatus.NOT_FOUND);
+    }
+
+    const prompt = buildSummaryPrompt({
+      nodeId: node.id,
+      nodeName: node.nodeName,
+      nodeDescription: node.description ?? '',
+    });
+
+    const stream = await this.qwenService.createStream([
+      { role: 'user', content: prompt },
+    ]);
     return { conversationId: null, stream };
   }
 }
