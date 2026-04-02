@@ -40,18 +40,28 @@ export class TencentCosService {
   // ========== [创建操作] ==========
 
   /**
-   * 创建用户文件夹（学生个人端）
+   * 创建用户文件夹（学生个人端和教师端）
    */
   async createUserFolder(createDto: CreateTencentCoDto): Promise<any> {
-    const { resourceName, parentPath, userId } = createDto;
+    const { resourceName, parentPath, userId, courseId } = createDto;
     if (!userId) throw new BadRequestException('必须提供用户ID');
 
-    const folderPath = this.formatPath(
-      parentPath
-        ? `users/${userId}/${parentPath}/${resourceName}`
-        : `users/${userId}/${resourceName}`,
-      true,
-    );
+    let folderPath: string;
+    if (!courseId) {
+      folderPath = this.formatPath(
+        parentPath
+          ? `users/${userId}/${parentPath}/${resourceName}`
+          : `users/${userId}/${resourceName}`,
+        true,
+      );
+    } else {
+      folderPath = this.formatPath(
+        parentPath
+          ? `public/${userId}/${courseId}/${parentPath}/${resourceName}`
+          : `public/${userId}/${courseId}/${resourceName}`,
+        true,
+      );
+    }
 
     try {
       await this.execCosAction('putObject', {
@@ -77,19 +87,29 @@ export class TencentCosService {
   }
 
   /**
-   * 生成用户文件上传链接（学生个人端）
+   * 生成用户文件上传链接（学生个人端和教师端）
    */
   async createUserFile(createDto: CreateTencentCoDto): Promise<any> {
-    const { resourceName, parentPath, fileSize, fileFormat, userId } =
+    const { resourceName, parentPath, fileSize, fileFormat, userId, courseId } =
       createDto;
     if (!userId) throw new BadRequestException('必须提供用户ID');
 
-    const filePath = this.formatPath(
-      parentPath
-        ? `users/${userId}/${parentPath}/${resourceName}`
-        : `users/${userId}/${resourceName}`,
-      false,
-    );
+    let filePath: string;
+    if (!courseId) {
+      filePath = this.formatPath(
+        parentPath
+          ? `users/${userId}/${parentPath}/${resourceName}`
+          : `users/${userId}/${resourceName}`,
+        false,
+      );
+    } else {
+      filePath = this.formatPath(
+        parentPath
+          ? `public/${userId}/${courseId}/${parentPath}/${resourceName}`
+          : `public/${userId}/${courseId}/${resourceName}`,
+        false,
+      );
+    }
 
     const uploadUrl = await this.getSignedUrlForUpload(filePath);
 
@@ -188,12 +208,172 @@ export class TencentCosService {
     return { ...record, uploadUrl };
   }
 
-  // ========== [读取操作] ==========
+  // ========== [读取操作，用户] ==========
 
   async listUserDirectory(userId: number, path: string = ''): Promise<any> {
+    // 首先获取用户信息以判断角色
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException('用户不存在');
+    }
+
     const userBasePath = `users/${userId}`;
-    const prefix = this.formatPath(
+    const userPrefix = this.formatPath(
       path ? `${userBasePath}/${path}` : userBasePath,
+      true,
+    );
+
+    try {
+      // 获取个人资源
+      const userResult = await this.execCosAction('getBucket', {
+        Bucket: this.bucket,
+        Region: this.region,
+        Prefix: userPrefix,
+        Delimiter: '/',
+      });
+
+      const userCosPaths = [
+        ...(userResult.Contents || []).map((i) => i.Key),
+        ...(userResult.CommonPrefixes || []).map((i) => i.Prefix),
+      ];
+
+      const userDbRecords = await this.prisma.userFile.findMany({
+        where: { filePath: { in: userCosPaths }, userId },
+      });
+      const userDbMap = new Map(userDbRecords.map((r) => [r.filePath, r]));
+
+      const userFolders = (userResult.CommonPrefixes || []).map((f) => {
+        const db = userDbMap.get(f.Prefix);
+        return {
+          id: db?.id || null,
+          resourceName: f.Prefix.split('/').filter(Boolean).pop(),
+          resourcePath: f.Prefix.replace(`${userBasePath}/`, ''),
+          resourceType: 'FOLDER',
+          createdAt: db?.createdAt || new Date(),
+          isPublic: false, // 个人资源为私有
+        };
+      });
+
+      const userFiles = (userResult.Contents || [])
+        .filter((i) => !i.Key.endsWith('/'))
+        .map((i) => {
+          const db = userDbMap.get(i.Key);
+          return {
+            id: db?.id || null,
+            resourceName: i.Key.split('/').pop(),
+            resourcePath: i.Key.replace(`${userBasePath}/`, ''),
+            resourceType: 'FILE',
+            fileSize: db?.fileSize || `${(i.Size / 1024 / 1024).toFixed(2)}MB`,
+            fileFormat: db?.fileFormat || i.Key.split('.').pop(),
+            createdAt: db?.createdAt || new Date(i.LastModified),
+            isPublic: false, // 个人资源为私有
+          };
+        });
+
+      let allResources = [...userFolders, ...userFiles];
+
+      // 如果是学生且在根目录，还需要获取所有已加入课程的根目录公共资源
+      if (user.role === 'student' && path === '') {
+        // 通过隐式中间表找到学生加入的所有课程（只查询根节点）
+        const enrolledCourses = await this.prisma.node.findMany({
+          where: {
+            students: { some: { id: userId } },
+            parentNodeId: null, // 只获取根节点（课程）
+          } as any,
+          select: { id: true, creatorId: true },
+        });
+
+        // 并行获取所有课程根目录的资源
+        const courseResourcesPromises = enrolledCourses.map(async (course) => {
+          if (!course.creatorId) {
+            return [];
+          }
+
+          const basePath = `public/${course.creatorId}/${course.id}`;
+          const prefix = this.formatPath(basePath, true);
+
+          try {
+            const result = await this.execCosAction('getBucket', {
+              Bucket: this.bucket,
+              Region: this.region,
+              Prefix: prefix,
+              Delimiter: '/',
+            });
+
+            const cosPaths = [
+              ...(result.Contents || []).map((i) => i.Key),
+              ...(result.CommonPrefixes || []).map((i) => i.Prefix),
+            ];
+
+            const dbRecords = await this.prisma.userFile.findMany({
+              where: { filePath: { in: cosPaths }, userId: course.creatorId },
+            });
+            const dbMap = new Map(dbRecords.map((r) => [r.filePath, r]));
+
+            const folders = (result.CommonPrefixes || []).map((f) => {
+              const db = dbMap.get(f.Prefix);
+              return {
+                id: db?.id || null,
+                resourceName: f.Prefix.split('/').filter(Boolean).pop(),
+                resourcePath: f.Prefix.replace(`${basePath}/`, ''),
+                resourceType: 'FOLDER',
+                createdAt: db?.createdAt || new Date(),
+                isPublic: true, // 课程资源为公有
+              };
+            });
+
+            const files = (result.Contents || [])
+              .filter((i) => !i.Key.endsWith('/'))
+              .map((i) => {
+                const db = dbMap.get(i.Key);
+                return {
+                  id: db?.id || null,
+                  resourceName: i.Key.split('/').pop(),
+                  resourcePath: i.Key.replace(`${basePath}/`, ''),
+                  resourceType: 'FILE',
+                  fileSize:
+                    db?.fileSize || `${(i.Size / 1024 / 1024).toFixed(2)}MB`,
+                  fileFormat: db?.fileFormat || i.Key.split('.').pop(),
+                  createdAt: db?.createdAt || new Date(i.LastModified),
+                  isPublic: true, // 课程资源为公有
+                };
+              });
+
+            return [...folders, ...files];
+          } catch (error) {
+            // 单个课程获取失败不影响其他课程
+            console.error(`获取课程 ${course.id} 资源失败:`, error.message);
+            return [];
+          }
+        });
+
+        const allCourseResources = await Promise.all(courseResourcesPromises);
+        const flattenedCourseResources = allCourseResources.flat();
+        allResources = [...allResources, ...flattenedCourseResources];
+      }
+
+      return allResources;
+    } catch (error) {
+      throw new BadRequestException(`获取列表失败: ${error.message}`);
+    }
+  }
+
+  // ========== [读取操作，课程] ==========
+
+  async listCourseDirectory(
+    userId: number,
+    path: string = '',
+    courseId: number,
+  ): Promise<any> {
+    // 教师直接使用自己的ID构建课程资源路径
+    const basePath = `public/${userId}/${courseId}`;
+
+    const prefix = this.formatPath(
+      path ? `${basePath}/${path}` : basePath,
       true,
     );
 
@@ -210,6 +390,7 @@ export class TencentCosService {
         ...(result.CommonPrefixes || []).map((i) => i.Prefix),
       ];
 
+      // 查询数据库记录，使用教师的userId
       const dbRecords = await this.prisma.userFile.findMany({
         where: { filePath: { in: cosPaths }, userId },
       });
@@ -220,7 +401,7 @@ export class TencentCosService {
         return {
           id: db?.id || null,
           resourceName: f.Prefix.split('/').filter(Boolean).pop(),
-          resourcePath: f.Prefix.replace(`${userBasePath}/`, ''),
+          resourcePath: f.Prefix.replace(`${basePath}/`, ''),
           resourceType: 'FOLDER',
           createdAt: db?.createdAt || new Date(),
         };
@@ -233,7 +414,7 @@ export class TencentCosService {
           return {
             id: db?.id || null,
             resourceName: i.Key.split('/').pop(),
-            resourcePath: i.Key.replace(`${userBasePath}/`, ''),
+            resourcePath: i.Key.replace(`${basePath}/`, ''),
             resourceType: 'FILE',
             fileSize: db?.fileSize || `${(i.Size / 1024 / 1024).toFixed(2)}MB`,
             fileFormat: db?.fileFormat || i.Key.split('.').pop(),
@@ -417,12 +598,22 @@ export class TencentCosService {
    * 学生端：删除个人资源
    * 保持原有参数: userId 和 resourcePath
    */
-  async deleteUserResource(userId: number, resourcePath: string): Promise<any> {
+  async deleteUserResource(
+    userId: number,
+    resourcePath: string,
+    courseId?: number,
+  ): Promise<any> {
     const isFolder = resourcePath.endsWith('/');
-    const fullPath = this.formatPath(
-      `users/${userId}/${resourcePath}`,
-      isFolder,
-    );
+
+    let fullPath: string;
+    if (!courseId) {
+      fullPath = this.formatPath(`users/${userId}/${resourcePath}`, isFolder);
+    } else {
+      fullPath = this.formatPath(
+        `public/${userId}/${courseId}/${resourcePath}`,
+        isFolder,
+      );
+    }
 
     try {
       // 1. 调用通用删除逻辑
@@ -452,8 +643,11 @@ export class TencentCosService {
     userId: number,
     oldPath: string,
     newPath: string,
+    courseId?: number,
   ): Promise<any> {
-    const userBasePath = `users/${userId}`;
+    const basePath = courseId
+      ? `public/${userId}/${courseId}`
+      : `users/${userId}`;
     const isFolder = oldPath.endsWith('/');
     const cleanOldPath = oldPath.replace(/\/+$/, '');
 
@@ -461,9 +655,9 @@ export class TencentCosService {
       ? newPath
       : [...cleanOldPath.split('/').slice(0, -1), newPath].join('/');
 
-    const fullOldPath = this.formatPath(`${userBasePath}/${oldPath}`, isFolder);
+    const fullOldPath = this.formatPath(`${basePath}/${oldPath}`, isFolder);
     const fullNewPath = this.formatPath(
-      `${userBasePath}/${relativeNewPath}`,
+      `${basePath}/${relativeNewPath}`,
       isFolder,
     );
 

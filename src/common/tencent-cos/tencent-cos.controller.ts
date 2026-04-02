@@ -65,14 +65,36 @@ export class TencentCosController {
     @Query('path') path?: string,
   ): Promise<any> {
     const userId = this.getUserIdFromReq(req);
-
     return await this.tencentCosService.listUserDirectory(userId, path || '');
+  }
+
+  /**
+   * 列出课程目录内容（仅教师端）
+   * 教师使用自己的ID直接构建课程资源路径：public/${userId}/${courseId}
+   */
+  @Get('course/list')
+  async listCourseDirectory(
+    @Req() req: Request,
+    @Query('courseId', ParseIntPipe) courseId: number,
+    @Query('path') path?: string,
+  ): Promise<any> {
+    const userId = this.getUserIdFromReq(req);
+
+    if (!courseId) {
+      throw new BadRequestException('必须提供 courseId 参数');
+    }
+
+    return await this.tencentCosService.listCourseDirectory(
+      userId,
+      path || '',
+      courseId,
+    );
   }
 
   // ========== [POST 请求] ==========
 
   /**
-   * 创建用户文件夹（学生个人端）
+   * 创建用户文件夹（学生个人端和教师个人端）
    */
   @Post('user/folder')
   async createUserFolder(
@@ -85,7 +107,7 @@ export class TencentCosController {
   }
 
   /**
-   * 上传用户文件（学生个人端）
+   * 上传用户文件（学生个人端和教师个人端）
    */
   @Post('user/file')
   async createUserFile(
@@ -98,7 +120,7 @@ export class TencentCosController {
   }
 
   /**
-   * 上传/绑定教学资源（教师端）
+   * 绑定教学资源（教师端）
    */
   @Post('teacher/resource')
   async createCourseResource(@Body() createDto: BindResourceDto): Promise<any> {
@@ -108,7 +130,7 @@ export class TencentCosController {
   // ========== [PUT 请求] ==========
 
   /**
-   * 重命名用户的文件或文件夹（学生个人端）
+   * 重命名用户的文件或文件夹（学生个人端和教师端）
    */
   @Put('user/rename')
   async renameUserResource(
@@ -116,7 +138,7 @@ export class TencentCosController {
     @Req() req: Request,
   ): Promise<any> {
     const userId = this.getUserIdFromReq(req);
-    const { oldPath, newPath } = updateDto;
+    const { oldPath, newPath, courseId } = updateDto;
 
     if (!oldPath || !newPath) {
       throw new BadRequestException('必须提供 oldPath 和 newPath');
@@ -126,28 +148,37 @@ export class TencentCosController {
       userId,
       oldPath,
       newPath,
+      courseId,
     );
   }
 
   // ========== [DELETE 请求] ==========
 
   /**
-   * 删除用户的文件或文件夹（学生个人端）
+   * 删除用户的文件或文件夹（学生个人端和教师端）
    * 使用 Query 传参
    */
   @Delete('user/delete')
   async deleteUserResource(
     @Req() req: Request,
     @Query('path') resourcePath: string,
+    @Query('courseId') courseId?: string,
   ): Promise<any> {
     const userId = this.getUserIdFromReq(req);
     if (!resourcePath) {
       throw new BadRequestException('必须提供 path 参数');
     }
 
+    // 手动转换courseId为数字（如果存在）
+    const parsedCourseId = courseId ? parseInt(courseId, 10) : undefined;
+    if (courseId && isNaN(parsedCourseId)) {
+      throw new BadRequestException('courseId 必须是有效的数字');
+    }
+
     return await this.tencentCosService.deleteUserResource(
       userId,
       resourcePath,
+      parsedCourseId,
     );
   }
 }

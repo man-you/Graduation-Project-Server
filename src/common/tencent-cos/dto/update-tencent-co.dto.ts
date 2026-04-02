@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateTencentCoDto } from './create-tencent-co.dto';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsNumber } from 'class-validator';
 
 export class UpdateTencentCoDto extends PartialType(CreateTencentCoDto) {
   @IsOptional()
@@ -10,4 +10,8 @@ export class UpdateTencentCoDto extends PartialType(CreateTencentCoDto) {
   @IsOptional()
   @IsString()
   newPath?: string;
+
+  @IsOptional()
+  @IsNumber()
+  courseId?: number;
 }

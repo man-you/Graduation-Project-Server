@@ -4,6 +4,7 @@ import {
   IsString,
   IsIn,
   IsNumber,
+  IsBoolean,
 } from 'class-validator';
 
 export class CreateTencentCoDto {
@@ -32,6 +33,11 @@ export class CreateTencentCoDto {
   @IsNumber()
   @IsOptional()
   userId?: number;
+
+  // 文件是否公共资源（教师课程端上传时可选，学生个人端默认为 false）
+  @IsNumber()
+  @IsOptional()
+  courseId?: number;
 }
 
 // 用于教学资源上传的 DTO，匹配前端 BindResourceDto 接口
