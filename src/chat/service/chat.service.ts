@@ -5,6 +5,7 @@ import { CreateChatDto } from '../dto/create-chat.dto';
 import { QuizService } from '../../quiz/quiz.service';
 import { buildAnalysisPrompt } from '../../prompts/analysis-prompt';
 import { buildSummaryPrompt } from '../../prompts/summary-prompt';
+import { buildGenerateExercisePrompt } from '../../prompts/generate-exercise-prompt';
 
 @Injectable()
 export class ChatService {
@@ -18,7 +19,7 @@ export class ChatService {
     dto: CreateChatDto,
     userId: number,
   ): Promise<{ conversationId: number; stream: AsyncIterable<string> }> {
-    const { userInput, mode, nodeId } = dto;
+    const { userInput, mode, nodeId, exerciseType, userPrompt } = dto;
 
     if (mode === 'analysis' && nodeId) {
       return this.handleAnalysisMode(nodeId, userId);
@@ -29,7 +30,7 @@ export class ChatService {
     }
 
     if (mode === 'generate' && nodeId) {
-      return this.handleGenerateMode(nodeId);
+      return this.handleGenerateMode(nodeId, exerciseType, userPrompt);
     }
 
     let conversationId = dto.conversationId;
@@ -227,7 +228,11 @@ export class ChatService {
     return { conversationId: null, stream };
   }
 
-  private async handleGenerateMode(nodeId: number) {
+  private async handleGenerateMode(
+    nodeId: number,
+    exerciseType?: 'SINGLE_CHOICE' | 'TRUE_FALSE' | 'FILL_BLANK',
+    userPrompt?: string,
+  ) {
     if (nodeId <= 0) {
       throw new HttpException('Invalid node ID', HttpStatus.BAD_REQUEST);
     }
@@ -241,10 +246,12 @@ export class ChatService {
       throw new HttpException(`Node ${nodeId} not found`, HttpStatus.NOT_FOUND);
     }
 
-    const prompt = buildSummaryPrompt({
-      nodeId: node.id,
-      nodeName: node.nodeName,
-      nodeDescription: node.description ?? '',
+    // 使用节点信息作为默认的用户提示词
+    const defaultUserPrompt = `请基于"${node.nodeName}"这个知识点生成一道习题。${node.description ? `知识点描述：${node.description}` : ''}`;
+
+    const prompt = buildGenerateExercisePrompt({
+      userPrompt: userPrompt || defaultUserPrompt,
+      exerciseType: exerciseType || 'SINGLE_CHOICE',
     });
 
     const stream = await this.qwenService.createStream([

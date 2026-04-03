@@ -13,6 +13,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { LoginAuthDto, UserDto, RegisterAuthDto } from './dto/auth.dto';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -98,7 +99,7 @@ export class AuthService {
         email,
         password: hashedPassword,
         userName: data.userName ? data.userName : '知链者',
-        role: 'student', // 默认角色
+        role: (role as Role) || Role.student, // 默认角色为 student
       },
       select: {
         id: true,

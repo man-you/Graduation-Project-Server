@@ -89,6 +89,7 @@ model User {
   userFiles       UserFile[]       // 用户上传的个人文件
   createdCourses  Node[]           @relation("UserCreatedNodes") // 教师创建的课程节点
   course          Node[]           @relation("UserCourses")
+  ppts            PPT[]            // 用户创建的PPT
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -165,23 +166,7 @@ model Node {
   learningRecords   LearningRecord[] // 学生在该点的学习数据
   exercises         Exercise[]       // 挂载在该点的练习题
 
-  // 图谱拓扑关系
-  sourceRelations   NodeRelation[] @relation("SourceNode") // 以此节点为起点
-  targetRelations   NodeRelation[] @relation("TargetNode") // 以此节点为终点
-
   createdAt         DateTime @default(now())
-}
-
-model NodeRelation {
-  id           Int          @id @default(autoincrement())
-  sourceNodeId Int          // 起始节点
-  targetNodeId Int          // 目标节点
-  relationType RelationType // 关系类型 (如 DEPENDS_ON)
-
-  sourceNode Node @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
-  targetNode Node @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
-
-  @@unique([sourceNodeId, targetNodeId, relationType])
 }
 
 model Resource {
@@ -265,4 +250,16 @@ model ExerciseRecord {
   createdAt DateTime @default(now())
 
   @@index([userId, exerciseId])
+}
+
+model PPT {
+  id          Int      @id @default(autoincrement())
+  title       String   // PPT标题
+  description String?  // PPT描述
+  pptUrl      String   // 星火模型返回的PPT URL链接
+  userId      Int      // 创建者用户ID
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
 }

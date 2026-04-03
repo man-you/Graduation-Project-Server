@@ -15,6 +15,12 @@ enum ChatMode {
   GENERATE = 'generate',
 }
 
+enum ExerciseType {
+  SINGLE_CHOICE = 'SINGLE_CHOICE',
+  TRUE_FALSE = 'TRUE_FALSE',
+  FILL_BLANK = 'FILL_BLANK',
+}
+
 @Exclude()
 export class CreateChatDto {
   @Expose()
@@ -40,4 +46,16 @@ export class CreateChatDto {
   @IsOptional()
   @IsNumber()
   nodeId: number;
+
+  @Expose()
+  @ValidateIf((u) => u.mode === 'generate')
+  @IsOptional()
+  @IsEnum(ExerciseType)
+  exerciseType: ExerciseType;
+
+  @Expose()
+  @ValidateIf((u) => u.mode === 'generate')
+  @IsOptional()
+  @IsString()
+  userPrompt: string;
 }

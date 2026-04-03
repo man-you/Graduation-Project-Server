@@ -30,7 +30,7 @@ export class RegisterAuthDto {
 
   @Expose()
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   identifier: string;
 
   @Expose()
