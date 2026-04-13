@@ -1,6 +1,6 @@
 import { Injectable, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as COS from 'cos-nodejs-sdk-v5';
+import COS = require('cos-nodejs-sdk-v5');
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   CreateTencentCoDto,
@@ -75,7 +75,10 @@ export class TencentCosService {
         },
       });
     } catch (error) {
-      throw new HttpException(`创建文件夹失败: ${error.message}`, 400);
+      throw new HttpException(
+        `创建文件夹失败: ${error instanceof Error ? error.message : String(error)}`,
+        400,
+      );
     }
   }
 
@@ -164,7 +167,7 @@ export class TencentCosService {
         } catch (error) {
           // 记录警告但不中断流程（防止因文件已被手动删除导致的接口崩溃）
           console.warn(
-            `清理 COS 旧文件失败 (可能文件已不存在): ${error.message}`,
+            `清理 COS 旧文件失败 (可能文件已不存在): ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
@@ -339,7 +342,10 @@ export class TencentCosService {
             return [...folders, ...files];
           } catch (error) {
             // 单个课程获取失败不影响其他课程
-            console.error(`获取课程 ${course.id} 资源失败:`, error.message);
+            console.error(
+              `获取课程 ${course.id} 资源失败:`,
+              error instanceof Error ? error.message : String(error),
+            );
             return [];
           }
         });
@@ -351,7 +357,10 @@ export class TencentCosService {
 
       return allResources;
     } catch (error) {
-      throw new HttpException(`获取列表失败: ${error.message}`, 400);
+      throw new HttpException(
+        `获取列表失败: ${error instanceof Error ? error.message : String(error)}`,
+        400,
+      );
     }
   }
 
@@ -417,7 +426,10 @@ export class TencentCosService {
 
       return [...folders, ...files];
     } catch (error) {
-      throw new HttpException(`获取列表失败: ${error.message}`, 400);
+      throw new HttpException(
+        `获取列表失败: ${error instanceof Error ? error.message : String(error)}`,
+        400,
+      );
     }
   }
 
@@ -561,8 +573,10 @@ export class TencentCosService {
 
         urls.push(url);
       } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         console.error('COS生成签名失败:', {
-          error: error.message || error,
+          error: errorMessage,
 
           nodeId: keyResult.nodeId,
 
@@ -576,7 +590,7 @@ export class TencentCosService {
         });
 
         throw new HttpException(
-          `COS签名生成失败：${error.message || JSON.stringify(error)}，节点ID: ${keyResult.nodeId}`,
+          `COS签名生成失败：${errorMessage}，节点ID: ${keyResult.nodeId}`,
           500,
         );
       }
@@ -626,7 +640,10 @@ export class TencentCosService {
       }
       return { success: true };
     } catch (error) {
-      throw new HttpException(`删除失败: ${error.message}`, 400);
+      throw new HttpException(
+        `删除失败: ${error instanceof Error ? error.message : String(error)}`,
+        400,
+      );
     }
   }
 
@@ -694,7 +711,10 @@ export class TencentCosService {
       }
       return { success: true, newPath: relativeNewPath };
     } catch (error) {
-      throw new HttpException(`重命名失败: ${error.message}`, 400);
+      throw new HttpException(
+        `重命名失败: ${error instanceof Error ? error.message : String(error)}`,
+        400,
+      );
     }
   }
 
