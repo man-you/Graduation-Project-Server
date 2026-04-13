@@ -89,7 +89,6 @@ model User {
   userFiles       UserFile[]       // 用户上传的个人文件
   createdCourses  Node[]           @relation("UserCreatedNodes") // 教师创建的课程节点
   course          Node[]           @relation("UserCourses")
-  ppts            PPT[]            // 用户创建的PPT
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -252,14 +251,4 @@ model ExerciseRecord {
   @@index([userId, exerciseId])
 }
 
-model PPT {
-  id          Int      @id @default(autoincrement())
-  title       String   // PPT标题
-  description String?  // PPT描述
-  pptUrl      String   // 星火模型返回的PPT URL链接
-  userId      Int      // 创建者用户ID
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  
-  @@index([userId])
-}
+
