@@ -1,15 +1,10 @@
 /**
  * AI分析模式提示词模板
  * 用于生成基于习题内容和用户答题表现的学习分析报告
- *
- * 使用说明：
- * - 将此模板中的占位符替换为实际数据
- * - 可根据需要调整分析要求和输出格式
- * - 保持专业但友好的语气
  */
 
 export const ANALYSIS_PROMPT_TEMPLATE = `
-你是一位专业的学习分析师，请基于以下学习数据为用户提供个性化的学习分析和建议。
+你是一位专业的学习分析师和贴心的学业导师。请基于以下提供的学习数据，为用户生成一份深入、个性化的学习分析报告。
 
 1. 【习题内容】
 {{quizContent}}
@@ -17,18 +12,22 @@ export const ANALYSIS_PROMPT_TEMPLATE = `
 2. 【用户答题表现】
 {{userPerformance}}
 
-3. 【分析要求】
-   1.1. 分析用户的知识掌握情况和薄弱环节
-
-   1.2. 针对错题提供详细的解析和学习建议  
-
-   1.3. 给出下一步的学习指导和练习建议
-
-   1.4. 语言要亲切、鼓励，避免过于严厉的批评
-
-   1.5. 如果用户表现优秀，也要给予肯定和进阶建议
+3. 【分析与报告要求】
+   1.1. **知识薄弱点定位**：分析用户的知识掌握情况，精准指出用户在哪些特定知识点、概念或技能上存在薄弱环节。
    
-请以专业但友好的语气回答，确保内容层次分明、结构清晰。使用适当的标题、序号、空格和换行，使分析报告易于阅读和理解，帮助用户更好地掌握相关知识点.
+   1.2. **错题深度解析**：针对用户做错的题目，提供详细的逻辑分析、考查点说明及正确的解题思路。
+   
+   1.3. **针对性改进建议**：给出具体的学习策略，帮助用户克服上述薄弱点。
+   
+   1.4. **课程资源推荐**：根据分析结果，为用户推荐下一步应当复习或进阶学习的课程资源。
+   
+   1.5. **下一步学习指导**：给出明确的练习方向和进阶建议。
+   
+   1.6. **语气与格式**：语言要亲切、鼓励，避免严厉批评。请以专业但友好的语气回答，确保内容层次分明、结构清晰、文本可读性好。使用 Markdown 格式（标题、加粗、列表），使报告在界面上易于阅读。
+
+
+
+注意：请直接开始你的分析报告，不要在开头或结尾出现“希望能帮你”、“随时联系我”等引导性废话。
 `;
 
 /**
@@ -43,7 +42,7 @@ export function buildAnalysisPrompt(context: {
 }): string {
   const { nodeId, quizData, userRecord } = context;
 
-  // 构建习题内容
+  // 1. 构建习题内容 (保留原逻辑，并增加正确答案以供AI精准解析)
   let quizContent = '';
   if (quizData && quizData.length > 0) {
     quizContent = quizData
@@ -59,6 +58,11 @@ export function buildAnalysisPrompt(context: {
             .join('\n')}\n`;
         }
 
+        // 保持逻辑完整性：如果数据中有正确答案，则告知AI，防止AI推断错误
+        if (q.answer || q.correctAnswer) {
+          question += `标准答案：${q.answer || q.correctAnswer}\n`;
+        }
+
         if (q.score) {
           question += `分值：${q.score}分\n`;
         }
@@ -70,7 +74,7 @@ export function buildAnalysisPrompt(context: {
     quizContent = '该节点暂无习题内容。';
   }
 
-  // 构建用户表现内容
+  // 2. 构建用户表现内容 (保留原逻辑)
   let performanceContent = '';
   if (userRecord && userRecord.length > 0) {
     performanceContent = userRecord
@@ -93,7 +97,7 @@ export function buildAnalysisPrompt(context: {
     performanceContent = '用户暂无答题记录。';
   }
 
-  // 替换模板中的占位符
+  // 3. 替换模板中的占位符
   return ANALYSIS_PROMPT_TEMPLATE.replace('{{nodeId}}', nodeId.toString())
     .replace('{{quizContent}}', quizContent)
     .replace('{{userPerformance}}', performanceContent);

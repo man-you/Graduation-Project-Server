@@ -30,18 +30,27 @@ export class ChatController {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders?.();
 
+    console.log('Streaming chat request received', body);
+
     const userId = req['user']?.userId;
     if (!userId) {
-      res.write(`event: error\ndata: ${JSON.stringify({ message: 'Unauthorized' })}\n\n`);
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ message: 'Unauthorized' })}\n\n`,
+      );
       res.end();
       return;
     }
 
     let closed = false;
-    req.on('close', () => { closed = true; });
+    req.on('close', () => {
+      closed = true;
+    });
 
     try {
-      const { conversationId, stream } = await this.chatService.streamChat(body, userId);
+      const { conversationId, stream } = await this.chatService.streamChat(
+        body,
+        userId,
+      );
       res.write(`event: meta\ndata: ${JSON.stringify({ conversationId })}\n\n`);
 
       for await (const chunk of stream) {
@@ -55,9 +64,13 @@ export class ChatController {
     } catch (err) {
       console.error('streamChat error', err);
       if (!res.writableEnded) {
-        res.write(`event: error\ndata: ${JSON.stringify({
-          message: err?.message || 'Chat failed',
-        })}\n\n`);
+        res.write(
+          `event: error\ndata: ${JSON.stringify({
+            message:
+              (err instanceof Error ? err.message : String(err)) ||
+              'Chat failed',
+          })}\n\n`,
+        );
       }
     } finally {
       res.end();
@@ -67,17 +80,28 @@ export class ChatController {
   @Get('conversations')
   async getConversations(@Query() query: ConversationDto, @Req() req: Request) {
     const userId = req['user']?.userId;
-    return this.chatService.loadConversations(userId, query.pageNum, query.pageSize);
+    return this.chatService.loadConversations(
+      userId,
+      query.pageNum,
+      query.pageSize,
+    );
   }
 
   @Get('conversation')
   async getConversation(@Query() query: MessageDto, @Req() req: Request) {
     const userId = req['user']?.userId;
-    return this.chatService.loadConversation(userId, query.conversationId, query.pageNum, query.pageSize);
+    return this.chatService.loadConversation(
+      userId,
+      query.conversationId,
+      query.pageNum,
+      query.pageSize,
+    );
   }
 
   @Delete('delete/:id')
-  async deleteConversation(@Param('id', ParseIntPipe) conversationId: number): Promise<void> {
+  async deleteConversation(
+    @Param('id', ParseIntPipe) conversationId: number,
+  ): Promise<void> {
     await this.chatService.deleteConversation(conversationId);
   }
 }

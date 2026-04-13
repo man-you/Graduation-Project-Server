@@ -5,7 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerMiddleware } from './middleware/logger.middleware';
-import * as cookieParser from 'cookie-parser';
+import cookieParser = require('cookie-parser');
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth/auth.guard';
 import { JwtService } from '@nestjs/jwt';
@@ -14,6 +14,7 @@ import { CourseModule } from './course/course.module';
 import { TencentCosModule } from './common/tencent-cos/tencent-cos.module';
 import { QuizModule } from './quiz/quiz.module';
 import { AdminModule } from './admin/admin.module';
+import { PptsModule } from './ppts/ppts.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AdminModule } from './admin/admin.module';
     TencentCosModule,
     QuizModule,
     AdminModule,
+    PptsModule,
   ],
   controllers: [AppController],
   providers: [

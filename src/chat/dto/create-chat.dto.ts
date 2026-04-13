@@ -10,8 +10,15 @@ import { Expose, Exclude } from 'class-transformer';
 
 enum ChatMode {
   CHAT = 'chat',
-  ANALYSIS = 'analysis', 
+  ANALYSIS = 'analysis',
   SUMMARY = 'summary',
+  GENERATE = 'generate',
+}
+
+enum ExerciseType {
+  SINGLE_CHOICE = 'SINGLE_CHOICE',
+  TRUE_FALSE = 'TRUE_FALSE',
+  FILL_BLANK = 'FILL_BLANK',
 }
 
 @Exclude()
@@ -22,7 +29,10 @@ export class CreateChatDto {
   conversationId: number;
 
   @Expose()
-  @ValidateIf((u) => u.mode !== 'analysis' && u.mode !== 'summary')
+  @ValidateIf(
+    (u) =>
+      u.mode !== 'analysis' && u.mode !== 'summary' && u.mode !== 'generate',
+  )
   @IsString()
   @IsNotEmpty()
   userInput: string;
@@ -36,4 +46,16 @@ export class CreateChatDto {
   @IsOptional()
   @IsNumber()
   nodeId: number;
+
+  @Expose()
+  @ValidateIf((u) => u.mode === 'generate')
+  @IsOptional()
+  @IsEnum(ExerciseType)
+  exerciseType: ExerciseType;
+
+  @Expose()
+  @ValidateIf((u) => u.mode === 'generate')
+  @IsOptional()
+  @IsString()
+  userPrompt: string;
 }
