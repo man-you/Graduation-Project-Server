@@ -43,13 +43,15 @@ export class TencentCosController {
    */
   @Get('signed-url')
   async getSignedUrl(
-    @Query('nodeId', ParseIntPipe) nodeId: number,
+    @Query('nodeId') nodeId: string,
+    @Query('fileId') fileId: string,
     @Query('method') method: 'get' | 'post' | 'put' | 'delete' = 'get',
     @Query('expireTime') expireTime?: number,
     @Query('resourceType') resourceType?: 'PPT' | 'VIDEO' | 'PDF',
   ): Promise<string> {
     return await this.tencentCosService.getSignedUrl(
-      nodeId,
+      +nodeId,
+      +fileId,
       method,
       expireTime ? Number(expireTime) : 3600,
       resourceType,
@@ -162,17 +164,16 @@ export class TencentCosController {
   async deleteUserResource(
     @Query('path') resourcePath: string,
     @Req() req: Request,
-    @Query('courseId', ParseIntPipe) courseId?: number,
+    @Query('courseId') courseId?: number,
   ): Promise<any> {
     const userId = this.getUserIdFromReq(req);
     if (!resourcePath) {
       throw new BadRequestException('必须提供 path 参数');
     }
-
     return await this.tencentCosService.deleteUserResource(
       userId,
       resourcePath,
-      courseId,
+      +courseId,
     );
   }
 }
