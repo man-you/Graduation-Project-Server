@@ -7,605 +7,293 @@ import {
   BindResourceDto,
 } from './dto/create-tencent-co.dto';
 
+/**
+ * 腾讯云 COS (Cloud Object Storage) 服务类
+ * 负责处理用户文件和课程资源在腾讯云存储中的操作，包括创建、读取、更新和删除
+ */
 @Injectable()
 export class TencentCosService {
   private cosClient: COS;
   private readonly bucket: string;
   private readonly region: string;
 
+  /**
+   * 构造函数 - 初始化腾讯云 COS 客户端
+   * @param configService 配置服务，用于获取腾讯云 COS 的配置信息
+   * @param prisma Prisma 数据库服务
+   */
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
   ) {
-    const secretId = this.configService.get('TENCENT_COS_SECRET_ID');
-    const secretKey = this.configService.get('TENCENT_COS_SECRET_KEY');
     this.bucket = this.configService.get('TENCENT_COS_BUCKET');
     this.region = this.configService.get('TENCENT_COS_REGION');
+    const secretId = this.configService.get('TENCENT_COS_SECRET_ID');
+    const secretKey = this.configService.get('TENCENT_COS_SECRET_KEY');
 
     if (!secretId || !secretKey || !this.bucket || !this.region) {
-      throw new HttpException('Tencent COS 配置不完整，请检查环境变量', 500);
+      throw new HttpException('Tencent COS 配置不完整', 500);
     }
+    this.cosClient = new COS({ SecretId: secretId, SecretKey: secretKey });
+  }
 
-    this.cosClient = new COS({
-      SecretId: secretId,
-      SecretKey: secretKey,
+  // ========== [资源创建操作] ==========
+
+  /**
+   * 创建用户文件夹
+   * @param dto 创建腾讯云资源 DTO，包含用户ID、资源名称等信息
+   * @returns 创建的用户文件记录
+   */
+  async createUserFolder(dto: CreateTencentCoDto): Promise<any> {
+    const path = this.buildFullPath(dto, true);
+    await this.execCosAction('putObject', {
+      Bucket: this.bucket,
+      Region: this.region,
+      Key: path,
+      Body: '',
+    });
+    return this.prisma.userFile.create({
+      data: {
+        fileName: dto.resourceName,
+        filePath: path,
+        isFolder: true,
+        userId: dto.userId,
+      },
     });
   }
 
-  // ========== [创建操作] ==========
-
   /**
-   * 创建用户文件夹（学生个人端和教师端）
+   * 创建用户文件（返回上传 URL）
+   * @param dto 创建腾讯云资源 DTO，包含用户ID、资源名称、文件大小、格式等信息
+   * @returns 包含数据库记录和上传 URL 的对象
    */
-  async createUserFolder(createDto: CreateTencentCoDto): Promise<any> {
-    const { resourceName, parentPath, userId, courseId } = createDto;
-    if (!userId) throw new HttpException('必须提供用户ID', 400);
-
-    let folderPath: string;
-    if (!courseId) {
-      folderPath = this.formatPath(
-        parentPath
-          ? `users/${userId}/${parentPath}/${resourceName}`
-          : `users/${userId}/${resourceName}`,
-        true,
-      );
-    } else {
-      folderPath = this.formatPath(
-        parentPath
-          ? `public/${userId}/${courseId}/${parentPath}/${resourceName}`
-          : `public/${userId}/${courseId}/${resourceName}`,
-        true,
-      );
-    }
-
-    try {
-      await this.execCosAction('putObject', {
-        Bucket: this.bucket,
-        Region: this.region,
-        Key: folderPath,
-        Body: '',
-      });
-
-      return await this.prisma.userFile.create({
-        data: {
-          fileName: resourceName,
-          filePath: folderPath,
-          isFolder: true,
-          userId: userId,
-        },
-      });
-    } catch (error) {
-      throw new HttpException(
-        `创建文件夹失败: ${error instanceof Error ? error.message : String(error)}`,
-        400,
-      );
-    }
+  async createUserFile(dto: CreateTencentCoDto): Promise<any> {
+    const path = this.buildFullPath(dto, false);
+    const uploadUrl = await this.getSignedUrlForUpload(path);
+    const record = await this.prisma.userFile.create({
+      data: {
+        fileName: dto.resourceName,
+        filePath: path,
+        fileSize: dto.fileSize,
+        fileFormat: dto.fileFormat,
+        isFolder: false,
+        userId: dto.userId,
+      },
+    });
+    return { ...record, uploadUrl };
   }
 
   /**
-   * 生成用户文件上传链接（学生个人端和教师端）
+   * 创建或更新课程资源（如视频、文档等）
+   * @param dto 绑定资源 DTO，包含节点ID、资源类型、资源名称等信息
+   * @returns 包含数据库记录和上传 URL 的对象
    */
-  async createUserFile(createDto: CreateTencentCoDto): Promise<any> {
-    const { resourceName, parentPath, fileSize, fileFormat, userId, courseId } =
-      createDto;
-    if (!userId) throw new HttpException('必须提供用户ID', 400);
-
-    let filePath: string;
-    if (!courseId) {
-      filePath = this.formatPath(
-        parentPath
-          ? `users/${userId}/${parentPath}/${resourceName}`
-          : `users/${userId}/${resourceName}`,
-        false,
-      );
-    } else {
-      filePath = this.formatPath(
-        parentPath
-          ? `public/${userId}/${courseId}/${parentPath}/${resourceName}`
-          : `public/${userId}/${courseId}/${resourceName}`,
-        false,
-      );
-    }
-
-    const uploadUrl = await this.getSignedUrlForUpload(filePath);
-
-    return await this.prisma.userFile
-      .create({
-        data: {
-          fileName: resourceName,
-          filePath: filePath,
-          fileSize: fileSize || null,
-          fileFormat: fileFormat || null,
-          isFolder: false,
-          userId: userId,
-        },
-      })
-      .then((record) => ({ ...record, uploadUrl }));
-  }
-
-  /**
-   * 创建或更新教学资源（教师课程端）
-   * 修复点：
-   * 1. 针对所有类型执行 Upsert（更新或创建）逻辑。
-   * 2. 若路径发生变化，调用 internalCosDelete 清理 COS 上的旧文件。
-   */
-  async createCourseResource(createDto: BindResourceDto): Promise<any> {
-    const { resourceName, nodeId, resourceType, fileSize, fileFormat } =
-      createDto;
-
-    // 1. 校验节点
+  async createCourseResource(dto: BindResourceDto): Promise<any> {
+    const { nodeId, resourceType, resourceName, fileSize, fileFormat } = dto;
     const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
-    if (!node) {
-      throw new HttpException(`知识节点不存在: nodeId=${nodeId}`, 400);
-    }
+    if (!node) throw new HttpException(`知识节点不存在: ${nodeId}`, 400);
 
-    // 2. 构建新资源路径
-    // 建议在路径中加入资源类型（如 resources/1/video/test.mp4），防止不同类型文件同名覆盖
-    const newResourcePath = this.formatPath(
+    const newPath = this.formatPath(
       `resources/${nodeId}/${resourceType.toLowerCase()}/${resourceName}`,
       false,
     );
-
-    // 3. 查找该节点下同类型的旧资源记录
-    const existingResource = await this.prisma.resource.findFirst({
-      where: {
-        nodeId: nodeId,
-        resourceType: resourceType,
-      },
+    const existing = await this.prisma.resource.findFirst({
+      where: { nodeId, resourceType },
     });
 
-    if (existingResource) {
-      // 只有当新上传的文件路径与数据库记录的路径不一致时，才需要删除旧文件
-      // 如果路径完全一致，接下来的 PUT 操作会自动覆盖 COS 上的对象
-      if (existingResource.resourcePath !== newResourcePath) {
-        try {
-          // 私有删除方法
-          await this.internalCosDelete(existingResource.resourcePath);
-          console.log(
-            `已物理删除 COS 旧资源: ${existingResource.resourcePath}`,
-          );
-        } catch (error) {
-          // 记录警告但不中断流程（防止因文件已被手动删除导致的接口崩溃）
-          console.warn(
-            `清理 COS 旧文件失败 (可能文件已不存在): ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      }
+    if (existing && existing.resourcePath !== newPath) {
+      await this.internalCosDelete(existing.resourcePath).catch((e) =>
+        console.warn('清理旧文件失败', e.message),
+      );
     }
 
-    // 5. 获取上传签名
-    const uploadUrl = await this.getSignedUrlForUpload(newResourcePath);
-
-    const commonData = {
-      resourceName: resourceName,
-      resourcePath: newResourcePath,
-      fileSize: fileSize || null,
-      fileFormat: fileFormat || null,
-    };
-
-    let record;
-    if (existingResource) {
-      // 执行更新记录
-      record = await this.prisma.resource.update({
-        where: { id: existingResource.id },
-        data: commonData,
-      });
-    } else {
-      // 执行创建记录
-      record = await this.prisma.resource.create({
-        data: {
-          ...commonData,
-          resourceType: resourceType,
-          nodeId: nodeId,
-        },
-      });
-    }
+    const uploadUrl = await this.getSignedUrlForUpload(newPath);
+    const data = { resourceName, resourcePath: newPath, fileSize, fileFormat };
+    const record = existing
+      ? await this.prisma.resource.update({ where: { id: existing.id }, data })
+      : await this.prisma.resource.create({
+          data: { ...data, resourceType, nodeId },
+        });
 
     return { ...record, uploadUrl };
   }
 
-  // ========== [读取操作，用户] ==========
+  // ========== [资源读取操作] ==========
 
+  /**
+   * 列出用户目录下的所有资源（包括个人资源和已加入课程的公共资源）
+   * @param userId 用户ID
+   * @param path 目录路径（可选，默认为根目录）
+   * @returns 资源列表
+   */
   async listUserDirectory(userId: number, path: string = ''): Promise<any> {
-    // 首先获取用户信息以判断角色
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },
     });
-
-    if (!user) {
-      throw new HttpException('用户不存在', 400);
-    }
+    if (!user) throw new HttpException('用户不存在', 400);
 
     const userBasePath = `users/${userId}`;
     const userPrefix = this.formatPath(
       path ? `${userBasePath}/${path}` : userBasePath,
       true,
     );
+    let allResources = await this.fetchAndMapResources(
+      userPrefix,
+      userId,
+      userBasePath,
+      false,
+    );
 
-    try {
-      // 获取个人资源
-      const userResult = await this.execCosAction('getBucket', {
-        Bucket: this.bucket,
-        Region: this.region,
-        Prefix: userPrefix,
-        Delimiter: '/',
+    // 学生根目录额外拉取已加入课程的公共资源
+    if (user.role === 'student' && path === '') {
+      const enrolled = await this.prisma.node.findMany({
+        where: {
+          students: { some: { id: userId } },
+          parentNodeId: null,
+        } as any,
+        select: { id: true, creatorId: true },
       });
 
-      const userCosPaths = [
-        ...(userResult.Contents || []).map((i) => i.Key),
-        ...(userResult.CommonPrefixes || []).map((i) => i.Prefix),
-      ];
-
-      const userDbRecords = await this.prisma.userFile.findMany({
-        where: { filePath: { in: userCosPaths }, userId },
-      });
-      const userDbMap = new Map(userDbRecords.map((r) => [r.filePath, r]));
-
-      const userFolders = (userResult.CommonPrefixes || []).map((f) => {
-        const db = userDbMap.get(f.Prefix);
-        return {
-          id: db?.id || null,
-          resourceName: f.Prefix.split('/').filter(Boolean).pop(),
-          resourcePath: f.Prefix.replace(`${userBasePath}/`, ''),
-          resourceType: 'FOLDER',
-          createdAt: db?.createdAt || new Date(),
-          isPublic: false, // 个人资源为私有
-        };
-      });
-
-      const userFiles = (userResult.Contents || [])
-        .filter((i) => !i.Key.endsWith('/'))
-        .map((i) => {
-          const db = userDbMap.get(i.Key);
-          return {
-            id: db?.id || null,
-            resourceName: i.Key.split('/').pop(),
-            resourcePath: i.Key.replace(`${userBasePath}/`, ''),
-            resourceType: 'FILE',
-            fileSize: db?.fileSize || `${(i.Size / 1024 / 1024).toFixed(2)}MB`,
-            fileFormat: db?.fileFormat || i.Key.split('.').pop(),
-            createdAt: db?.createdAt || new Date(i.LastModified),
-            isPublic: false, // 个人资源为私有
-          };
-        });
-
-      let allResources = [...userFolders, ...userFiles];
-
-      // 如果是学生且在根目录，还需要获取所有已加入课程的根目录公共资源
-      if (user.role === 'student' && path === '') {
-        // 通过隐式中间表找到学生加入的所有课程（只查询根节点）
-        const enrolledCourses = await this.prisma.node.findMany({
-          where: {
-            students: { some: { id: userId } },
-            parentNodeId: null, // 只获取根节点（课程）
-          } as any,
-          select: { id: true, creatorId: true },
-        });
-
-        // 并行获取所有课程根目录的资源
-        const courseResourcesPromises = enrolledCourses.map(async (course) => {
-          if (!course.creatorId) {
-            return [];
-          }
-
+      const courseResources = await Promise.all(
+        enrolled.map(async (course) => {
+          if (!course.creatorId) return [];
           const basePath = `public/${course.creatorId}/${course.id}`;
-          const prefix = this.formatPath(basePath, true);
-
-          try {
-            const result = await this.execCosAction('getBucket', {
-              Bucket: this.bucket,
-              Region: this.region,
-              Prefix: prefix,
-              Delimiter: '/',
-            });
-
-            const cosPaths = [
-              ...(result.Contents || []).map((i) => i.Key),
-              ...(result.CommonPrefixes || []).map((i) => i.Prefix),
-            ];
-
-            const dbRecords = await this.prisma.userFile.findMany({
-              where: { filePath: { in: cosPaths }, userId: course.creatorId },
-            });
-            const dbMap = new Map(dbRecords.map((r) => [r.filePath, r]));
-
-            const folders = (result.CommonPrefixes || []).map((f) => {
-              const db = dbMap.get(f.Prefix);
-              return {
-                id: db?.id || null,
-                resourceName: f.Prefix.split('/').filter(Boolean).pop(),
-                resourcePath: f.Prefix.replace(`${basePath}/`, ''),
-                resourceType: 'FOLDER',
-                createdAt: db?.createdAt || new Date(),
-                isPublic: true, // 课程资源为公有
-              };
-            });
-
-            const files = (result.Contents || [])
-              .filter((i) => !i.Key.endsWith('/'))
-              .map((i) => {
-                const db = dbMap.get(i.Key);
-                return {
-                  id: db?.id || null,
-                  resourceName: i.Key.split('/').pop(),
-                  resourcePath: i.Key.replace(`${basePath}/`, ''),
-                  resourceType: 'FILE',
-                  fileSize:
-                    db?.fileSize || `${(i.Size / 1024 / 1024).toFixed(2)}MB`,
-                  fileFormat: db?.fileFormat || i.Key.split('.').pop(),
-                  createdAt: db?.createdAt || new Date(i.LastModified),
-                  isPublic: true, // 课程资源为公有
-                };
-              });
-
-            return [...folders, ...files];
-          } catch (error) {
-            // 单个课程获取失败不影响其他课程
-            console.error(
-              `获取课程 ${course.id} 资源失败:`,
-              error instanceof Error ? error.message : String(error),
-            );
-            return [];
-          }
-        });
-
-        const allCourseResources = await Promise.all(courseResourcesPromises);
-        const flattenedCourseResources = allCourseResources.flat();
-        allResources = [...allResources, ...flattenedCourseResources];
-      }
-
-      return allResources;
-    } catch (error) {
-      throw new HttpException(
-        `获取列表失败: ${error instanceof Error ? error.message : String(error)}`,
-        400,
+          return this.fetchAndMapResources(
+            this.formatPath(basePath, true),
+            course.creatorId,
+            basePath,
+            true,
+          );
+        }),
       );
+      allResources = [...allResources, ...courseResources.flat()];
     }
+    return allResources;
   }
 
-  // ========== [读取操作，课程] ==========
-
+  /**
+   * 列出课程目录下的所有资源
+   * @param userId 用户ID（课程创建者）
+   * @param path 目录路径（可选，默认为根目录）
+   * @param courseId 课程ID
+   * @returns 资源列表
+   */
   async listCourseDirectory(
     userId: number,
     path: string = '',
     courseId: number,
   ): Promise<any> {
-    // 教师直接使用自己的ID构建课程资源路径
     const basePath = `public/${userId}/${courseId}`;
-
-    const prefix = this.formatPath(
-      path ? `${basePath}/${path}` : basePath,
-      true,
+    return this.fetchAndMapResources(
+      this.formatPath(path ? `${basePath}/${path}` : basePath, true),
+      userId,
+      basePath,
+      false,
     );
-
-    try {
-      const result = await this.execCosAction('getBucket', {
-        Bucket: this.bucket,
-        Region: this.region,
-        Prefix: prefix,
-        Delimiter: '/',
-      });
-
-      const cosPaths = [
-        ...(result.Contents || []).map((i) => i.Key),
-        ...(result.CommonPrefixes || []).map((i) => i.Prefix),
-      ];
-
-      // 查询数据库记录，使用教师的userId
-      const dbRecords = await this.prisma.userFile.findMany({
-        where: { filePath: { in: cosPaths }, userId },
-      });
-      const dbMap = new Map(dbRecords.map((r) => [r.filePath, r]));
-
-      const folders = (result.CommonPrefixes || []).map((f) => {
-        const db = dbMap.get(f.Prefix);
-        return {
-          id: db?.id || null,
-          resourceName: f.Prefix.split('/').filter(Boolean).pop(),
-          resourcePath: f.Prefix.replace(`${basePath}/`, ''),
-          resourceType: 'FOLDER',
-          createdAt: db?.createdAt || new Date(),
-        };
-      });
-
-      const files = (result.Contents || [])
-        .filter((i) => !i.Key.endsWith('/'))
-        .map((i) => {
-          const db = dbMap.get(i.Key);
-          return {
-            id: db?.id || null,
-            resourceName: i.Key.split('/').pop(),
-            resourcePath: i.Key.replace(`${basePath}/`, ''),
-            resourceType: 'FILE',
-            fileSize: db?.fileSize || `${(i.Size / 1024 / 1024).toFixed(2)}MB`,
-            fileFormat: db?.fileFormat || i.Key.split('.').pop(),
-            createdAt: db?.createdAt || new Date(i.LastModified),
-          };
-        });
-
-      return [...folders, ...files];
-    } catch (error) {
-      throw new HttpException(
-        `获取列表失败: ${error instanceof Error ? error.message : String(error)}`,
-        400,
-      );
-    }
   }
 
+  /**
+   * 获取单个资源的签名 URL（用于下载或上传）
+   * @param nodeId 知识节点ID（可选）
+   * @param fileId 文件ID（可选）
+   * @param method HTTP 方法（默认为 'GET'）
+   * @param expireTime 过期时间（秒，默认为 3600 秒）
+   * @param resourceType 资源类型（可选）
+   * @returns 签名 URL 字符串
+   */
   async getSignedUrl(
-    nodeId: number,
-    method: string = 'GET',
-    expireTime: number = 3600,
-    resourceType?: 'PPT' | 'VIDEO' | 'PDF',
+    nodeId?: number,
+    fileId?: number,
+    method = 'GET',
+    expireTime = 3600,
+    resourceType?: any,
   ): Promise<string> {
-    const whereCondition: any = { nodeId };
-    if (resourceType) whereCondition.resourceType = resourceType;
+    let finalPath: string, fileName: string;
 
-    const resource = await this.prisma.resource.findFirst({
-      where: whereCondition,
-    });
-    if (!resource) throw new HttpException(`资源不存在`, 404);
+    if (fileId) {
+      const file = await this.prisma.userFile.findUnique({
+        where: { id: fileId },
+      });
+      if (!file) throw new HttpException('文件不存在', 404);
+      [finalPath, fileName] = [file.filePath, file.fileName];
+    } else if (nodeId) {
+      const res = await this.prisma.resource.findFirst({
+        where: { nodeId, ...(resourceType && { resourceType }) },
+      });
+      if (!res) throw new HttpException('资源不存在', 404);
+      [finalPath, fileName] = [
+        res.resourcePath,
+        res.resourcePath.split('/').pop(),
+      ];
+    } else {
+      throw new HttpException('参数错误', 400);
+    }
 
-    const authorization = this.cosClient.getAuth({
-      Method: method.toUpperCase() as COS.Method,
-      Key: resource.resourcePath,
+    const auth = this.cosClient.getAuth({
+      Method: method.toUpperCase() as any,
+      Key: finalPath,
       Expires: expireTime,
       Bucket: this.bucket,
       Region: this.region,
     });
+    let url = `https://${this.bucket}.cos.${this.region}.myqcloud.com/${finalPath}?${auth}`;
 
-    let url = `https://${this.bucket}.cos.${this.region}.myqcloud.com/${resource.resourcePath}?${authorization}`;
-    const isMedia = /\.(mp4|webm|ogg|mp3|wav|mov)$/i.test(
-      resource.resourcePath,
-    );
-
-    if (!isMedia) {
-      const fileName = resource.resourcePath.split('/').pop() || '';
-      url += `&response-content-disposition=inline;filename="${encodeURIComponent(fileName)}"`;
+    if (!/\.(mp4|webm|ogg|mp3|wav|mov)$/i.test(finalPath)) {
+      const disposition =
+        method.toUpperCase() === 'GET' ? 'attachment' : 'inline';
+      url += `&response-content-disposition=${disposition};filename="${encodeURIComponent(fileName)}"`;
     }
     return url;
   }
 
   /**
-
-   * 批量获取多个资源的预签名 URL
-
-   * @param nodeIds 资源节点ID数组
-
-   * @param method HTTP请求方法，默认get
-
-   * @param expireTime 签名过期时间（秒），默认3600秒
-
-   * @returns 预签名URL数组
-
+   * 批量获取多个节点资源的签名 URL
+   * @param nodeIds 节点ID数组
+   * @param method HTTP 方法（默认为 'get'）
+   * @param expireTime 过期时间（秒，默认为 3600 秒）
+   * @returns 节点ID到URL数组的映射
    */
-
   async getMultipleSignedUrls(
     nodeIds: number[],
-
-    method: 'get' | 'post' | 'put' | 'delete' = 'get',
-
-    expireTime: number = 3600,
-  ): Promise<string[]> {
-    // 1. 基础配置校验（补充密钥校验）
-
-    const bucket = this.configService.get('TENCENT_COS_BUCKET');
-
-    const region = this.configService.get('TENCENT_COS_REGION');
-
-    const secretId = this.configService.get('TENCENT_COS_SECRET_ID');
-
-    const secretKey = this.configService.get('TENCENT_COS_SECRET_KEY');
-
-    if (!bucket || !region) {
-      throw new HttpException('COS配置（bucket/region）未正确配置', 500);
-    }
-
-    if (!secretId || !secretKey) {
-      throw new HttpException('COS密钥（secretId/secretKey）配置缺失', 500);
-    }
-
-    // 2. 查询资源路径并校验
-
+    method: any = 'get',
+    expireTime = 3600,
+  ): Promise<Map<number, string[]>> {
     const keyResults = await this.prisma.resource.findMany({
-      where: {
-        nodeId: {
-          in: nodeIds,
-        },
-      },
-
-      select: { nodeId: true, resourcePath: true },
+      where: { nodeId: { in: nodeIds } },
+      orderBy: { id: 'asc' },
     });
 
-    if (!keyResults || keyResults.length === 0) {
-      throw new HttpException(`未找到任何nodeId对应的资源路径`, 404);
-    }
+    if (!keyResults.length) throw new HttpException('未找到资源', 404);
+    const nodeUrlMap = new Map<number, string[]>();
 
-    // 检查是否所有传入的nodeId都存在
-
-    const foundNodeIds = keyResults.map((result) => result.nodeId);
-
-    const missingNodeIds = nodeIds.filter((id) => !foundNodeIds.includes(id));
-
-    if (missingNodeIds.length > 0) {
-      throw new HttpException(
-        `未找到以下nodeId对应的资源路径: ${missingNodeIds.join(', ')}`,
-        404,
+    for (const res of keyResults) {
+      const auth = this.cosClient.getAuth({
+        Method: method.toUpperCase(),
+        Key: res.resourcePath,
+        Expires: expireTime,
+        Bucket: this.bucket,
+        Region: this.region,
+      });
+      const encodedName = encodeURIComponent(
+        res.resourcePath.split('/').pop() || '',
       );
+      const url = `https://${this.bucket}.cos.${this.region}.myqcloud.com/${res.resourcePath}?${auth}&response-content-disposition=inline%3B%20filename%3D%22${encodedName}%22`;
+
+      if (!nodeUrlMap.has(res.nodeId)) nodeUrlMap.set(res.nodeId, []);
+      nodeUrlMap.get(res.nodeId).push(url);
     }
-
-    // 3. 为每个资源生成预签名URL
-
-    const urls: string[] = [];
-
-    for (const keyResult of keyResults) {
-      const originalKey = keyResult.resourcePath;
-
-      // 提取文件名用于响应头（仅编码文件名，避免中文乱码）
-
-      const fileName = originalKey.split('/').pop() || '';
-
-      const encodedFileName = encodeURIComponent(fileName);
-
-      try {
-        // 直接调用getAuth（同步方法，返回签名字符串）
-
-        const authorization = this.cosClient.getAuth({
-          Method: method.toUpperCase() as COS.Method, // 确保类型匹配
-
-          Key: originalKey, // 原始Key（带空格，SDK自动处理编码）
-
-          Expires: expireTime,
-
-          Bucket: bucket,
-
-          Region: region,
-        });
-
-        // 构建完整的预签名URL
-
-        if (!authorization) {
-          throw new HttpException('COS未返回有效的预签名URL', 500);
-        }
-
-        const url = `https://${bucket}.cos.${region}.myqcloud.com/${originalKey}?${authorization}&response-content-disposition=inline%3B%20filename%3D%22${encodedFileName}%22`;
-
-        urls.push(url);
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error('COS生成签名失败:', {
-          error: errorMessage,
-
-          nodeId: keyResult.nodeId,
-
-          originalKey,
-
-          bucket,
-
-          region,
-
-          secretId: secretId.substring(0, 10) + '...', // 脱敏展示
-        });
-
-        throw new HttpException(
-          `COS签名生成失败：${errorMessage}，节点ID: ${keyResult.nodeId}`,
-          500,
-        );
-      }
-    }
-
-    // 根据原始nodeIds顺序排序结果
-
-    return urls;
+    return nodeUrlMap;
   }
 
-  // ========== [更新与删除：核心部分] ==========
+  // ========== [更新与删除操作] ==========
 
   /**
-   * 学生端：删除个人资源
-   * 保持原有参数: userId 和 resourcePath
+   * 删除用户资源（文件或文件夹）
+   * @param userId 用户ID
+   * @param resourcePath 资源路径
+   * @param courseId 课程ID（可选，用于公共课程资源）
+   * @returns 操作结果
    */
   async deleteUserResource(
     userId: number,
@@ -613,43 +301,27 @@ export class TencentCosService {
     courseId?: number,
   ): Promise<any> {
     const isFolder = resourcePath.endsWith('/');
-
-    let fullPath: string;
-    if (!courseId) {
-      fullPath = this.formatPath(`users/${userId}/${resourcePath}`, isFolder);
-    } else {
-      fullPath = this.formatPath(
-        `public/${userId}/${courseId}/${resourcePath}`,
-        isFolder,
-      );
-    }
-
-    try {
-      // 1. 调用通用删除逻辑
-      await this.internalCosDelete(fullPath);
-
-      // 2. 数据库同步处理
-      if (isFolder) {
-        await this.prisma.userFile.deleteMany({
-          where: { filePath: { startsWith: fullPath }, userId },
-        });
-      } else {
-        await this.prisma.userFile.deleteMany({
-          where: { filePath: fullPath, userId },
-        });
-      }
-      return { success: true };
-    } catch (error) {
-      throw new HttpException(
-        `删除失败: ${error instanceof Error ? error.message : String(error)}`,
-        400,
-      );
-    }
+    const fullPath = this.buildFullPath(
+      { userId, courseId, resourceName: resourcePath },
+      isFolder,
+    );
+    await this.internalCosDelete(fullPath);
+    await this.prisma.userFile.deleteMany({
+      where: {
+        filePath: isFolder ? { startsWith: fullPath } : fullPath,
+        userId,
+      },
+    });
+    return { success: true };
   }
 
   /**
-   * 学生端：重命名资源
-   * 保持原有参数
+   * 重命名用户资源（文件或文件夹）
+   * @param userId 用户ID
+   * @param oldPath 旧路径
+   * @param newPath 新路径
+   * @param courseId 课程ID（可选，用于公共课程资源）
+   * @returns 操作结果，包含新的相对路径
    */
   async renameUserResource(
     userId: number,
@@ -661,84 +333,154 @@ export class TencentCosService {
       ? `public/${userId}/${courseId}`
       : `users/${userId}`;
     const isFolder = oldPath.endsWith('/');
-    const cleanOldPath = oldPath.replace(/\/+$/, '');
+    const fullOld = this.formatPath(`${basePath}/${oldPath}`, isFolder);
 
-    let relativeNewPath = newPath.includes('/')
+    const relativeNew = newPath.includes('/')
       ? newPath
-      : [...cleanOldPath.split('/').slice(0, -1), newPath].join('/');
-
-    const fullOldPath = this.formatPath(`${basePath}/${oldPath}`, isFolder);
-    const fullNewPath = this.formatPath(
-      `${basePath}/${relativeNewPath}`,
-      isFolder,
-    );
-
-    if (fullOldPath === fullNewPath) return { success: true };
-
-    try {
-      if (isFolder) {
-        const list = await this.execCosAction('getBucket', {
-          Bucket: this.bucket,
-          Region: this.region,
-          Prefix: fullOldPath,
-        });
-        for (const item of list.Contents || []) {
-          const newKey = item.Key.replace(fullOldPath, fullNewPath);
-          await this.moveSingleObject(item.Key, newKey);
-        }
-        const allRelatedFiles = await this.prisma.userFile.findMany({
-          where: { filePath: { startsWith: fullOldPath }, userId },
-        });
-        await Promise.all(
-          allRelatedFiles.map((file) =>
-            this.prisma.userFile.update({
-              where: { id: file.id },
-              data: {
-                filePath: file.filePath.replace(fullOldPath, fullNewPath),
-                ...(file.filePath === fullOldPath
-                  ? { fileName: newPath.replace(/\/$/, '') }
-                  : {}),
-              },
-            }),
-          ),
+      : [...oldPath.replace(/\/+$/, '').split('/').slice(0, -1), newPath].join(
+          '/',
         );
-      } else {
-        await this.moveSingleObject(fullOldPath, fullNewPath);
-        await this.prisma.userFile.updateMany({
-          where: { filePath: fullOldPath, userId },
-          data: { filePath: fullNewPath, fileName: newPath },
-        });
+    const fullNew = this.formatPath(`${basePath}/${relativeNew}`, isFolder);
+
+    if (fullOld === fullNew) return { success: true };
+
+    if (isFolder) {
+      const list = await this.execCosAction('getBucket', {
+        Bucket: this.bucket,
+        Region: this.region,
+        Prefix: fullOld,
+      });
+      for (const item of list.Contents || []) {
+        await this.moveSingleObject(
+          item.Key,
+          item.Key.replace(fullOld, fullNew),
+        );
       }
-      return { success: true, newPath: relativeNewPath };
-    } catch (error) {
-      throw new HttpException(
-        `重命名失败: ${error instanceof Error ? error.message : String(error)}`,
-        400,
+      const files = await this.prisma.userFile.findMany({
+        where: { filePath: { startsWith: fullOld }, userId },
+      });
+      await Promise.all(
+        files.map((f) =>
+          this.prisma.userFile.update({
+            where: { id: f.id },
+            data: {
+              filePath: f.filePath.replace(fullOld, fullNew),
+              ...(f.filePath === fullOld
+                ? { fileName: newPath.replace(/\/$/, '') }
+                : {}),
+            },
+          }),
+        ),
       );
+    } else {
+      await this.moveSingleObject(fullOld, fullNew);
+      await this.prisma.userFile.updateMany({
+        where: { filePath: fullOld, userId },
+        data: { filePath: fullNew, fileName: newPath },
+      });
     }
+    return { success: true, newPath: relativeNew };
   }
 
-  // ========== [辅助私有方法] ==========
+  // ========== [私有辅助方法] ==========
 
   /**
-   * 内部通用：物理删除 COS 文件（支持文件/目录）
+   * 构建资源的完整路径
+   * @param dto 资源 DTO 对象
+   * @param isFolder 是否为文件夹
+   * @returns 完整路径字符串
+   */
+  private buildFullPath(dto: any, isFolder: boolean): string {
+    const { userId, courseId, parentPath, resourceName } = dto;
+    const base = courseId ? `public/${userId}/${courseId}` : `users/${userId}`;
+    const sub = parentPath ? `${parentPath}/${resourceName}` : resourceName;
+    return this.formatPath(`${base}/${sub}`, isFolder);
+  }
+
+  /**
+   * 从 COS 获取资源并映射为统一格式
+   * @param prefix COS 前缀路径
+   * @param userId 用户ID
+   * @param basePath 基础路径
+   * @param isPublic 是否为公共资源
+   * @returns 格式化后的资源列表
+   */
+  private async fetchAndMapResources(
+    prefix: string,
+    userId: number,
+    basePath: string,
+    isPublic: boolean,
+  ) {
+    const result = await this.execCosAction('getBucket', {
+      Bucket: this.bucket,
+      Region: this.region,
+      Prefix: prefix,
+      Delimiter: '/',
+    });
+    const cosPaths = [
+      ...(result.Contents || []).map((i) => i.Key),
+      ...(result.CommonPrefixes || []).map((i) => i.Prefix),
+    ];
+    const dbRecords = await this.prisma.userFile.findMany({
+      where: { filePath: { in: cosPaths }, userId },
+    });
+    const dbMap = new Map(
+      dbRecords.map((r) => [decodeURIComponent(r.filePath), r]),
+    );
+
+    const mapItem = (
+      key: string,
+      type: 'FOLDER' | 'FILE',
+      size?: number,
+      date?: string,
+    ) => {
+      const decodedKey = decodeURIComponent(key);
+      const db = dbMap.get(decodedKey);
+      return {
+        id: db?.id || null,
+        resourceName:
+          type === 'FOLDER'
+            ? decodedKey.split('/').filter(Boolean).pop()
+            : decodedKey.split('/').pop(),
+        resourcePath: decodedKey.replace(`${basePath}/`, ''),
+        resourceType: type,
+        fileSize:
+          db?.fileSize ||
+          (size ? `${(size / 1024 / 1024).toFixed(2)}MB` : null),
+        fileFormat:
+          db?.fileFormat ||
+          (type === 'FILE' ? decodedKey.split('.').pop()?.toUpperCase() : null),
+        createdAt: db?.createdAt || (date ? new Date(date) : new Date()),
+        isPublic,
+      };
+    };
+
+    return [
+      ...(result.CommonPrefixes || []).map((f) => mapItem(f.Prefix, 'FOLDER')),
+      ...(result.Contents || [])
+        .filter((i) => !i.Key.endsWith('/'))
+        .map((i) => mapItem(i.Key, 'FILE', i.Size, i.LastModified)),
+    ];
+  }
+
+  /**
+   * 内部删除 COS 资源的方法
+   * @param fullPath 完整路径
    */
   private async internalCosDelete(fullPath: string): Promise<void> {
-    const isFolder = fullPath.endsWith('/');
-    if (isFolder) {
+    if (fullPath.endsWith('/')) {
       const list = await this.execCosAction('getBucket', {
         Bucket: this.bucket,
         Region: this.region,
         Prefix: fullPath,
       });
       const objects = (list.Contents || []).map((item) => ({ Key: item.Key }));
-      if (objects.length > 0) {
+      if (objects.length)
         await this.execCosAction('deleteMultipleObject', {
           Bucket: this.bucket,
           Region: this.region,
           Objects: objects,
         });
-      }
     } else {
       await this.execCosAction('deleteObject', {
         Bucket: this.bucket,
@@ -748,17 +490,27 @@ export class TencentCosService {
     }
   }
 
-  private async getSignedUrlForUpload(resourcePath: string): Promise<string> {
+  /**
+   * 获取用于上传的签名 URL
+   * @param path 资源路径
+   * @returns 上传 URL
+   */
+  private async getSignedUrlForUpload(path: string) {
     const auth = this.cosClient.getAuth({
       Method: 'PUT',
-      Key: resourcePath,
+      Key: path,
       Expires: 3600,
       Bucket: this.bucket,
       Region: this.region,
     });
-    return `https://${this.bucket}.cos.${this.region}.myqcloud.com/${resourcePath}?${auth}`;
+    return `https://${this.bucket}.cos.${this.region}.myqcloud.com/${path}?${auth}`;
   }
 
+  /**
+   * 移动单个 COS 对象（先复制后删除）
+   * @param oldKey 旧键名
+   * @param newKey 新键名
+   */
   private async moveSingleObject(oldKey: string, newKey: string) {
     await this.execCosAction('putObjectCopy', {
       Bucket: this.bucket,
@@ -773,20 +525,34 @@ export class TencentCosService {
     });
   }
 
-  private async execCosAction(action: string, params: any): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.cosClient[action](params, (err, data) => {
-        if (err) reject(err);
-        else resolve(data);
-      });
-    });
+  /**
+   * 执行 COS SDK 操作的通用方法
+   * @param action 操作名称
+   * @param params 参数对象
+   * @returns Promise 结果
+   */
+  private execCosAction(action: string, params: any): Promise<any> {
+    return new Promise((res, rej) =>
+      this.cosClient[action](params, (err, data) =>
+        err ? rej(err) : res(data),
+      ),
+    );
   }
 
+  /**
+   * 格式化路径，确保安全性和一致性
+   * @param path 原始路径
+   * @param isFolder 是否为文件夹
+   * @returns 格式化后的路径
+   */
   private formatPath(path: string, isFolder: boolean): string {
     if (path.includes('../') || path.includes('..\\'))
-      throw new HttpException('非法的路径', 400);
-    let cleanPath = path.replace(/\/+$/, '');
-    if (isFolder) cleanPath += '/';
-    return cleanPath.startsWith('/') ? cleanPath.substring(1) : cleanPath;
+      throw new HttpException('非法路径', 400);
+    let clean = path.replace(/\/+$/, '').startsWith('/')
+      ? path.substring(1)
+      : path;
+    return isFolder
+      ? `${clean.replace(/\/+$/, '')}/`
+      : clean.replace(/\/+$/, '');
   }
 }
